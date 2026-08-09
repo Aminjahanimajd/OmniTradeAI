@@ -42,7 +42,7 @@ async def deterministic_executor(
     if node.type in {"technical_indicators", "fundamental_ratios"}:
         return {"kind": node.type, "score": 0.62, "source": inputs}
     if node.type.endswith("_analyst"):
-        profiles = {
+        profiles: dict[str, dict[str, Any]] = {
             "market_analyst": {
                 "viewpoint": "MILDLY BULLISH",
                 "confidence": 0.72,
@@ -126,13 +126,18 @@ async def deterministic_executor(
             "basis": inputs,
         }
     if node.type.endswith("_risk"):
-        profile = node.type.removesuffix("_risk")
+        risk_profile = node.type.removesuffix("_risk")
         views = {
             "aggressive": {"stance": "ACCEPT", "confidence": 0.67, "summary": "An aggressive user can accept the HOLD proposal because it keeps upside exposure without increasing the position.", "impact": "Supports HOLD and would allow BUY only after a stronger bullish confirmation.", "key_points": ["Upside remains possible.", "No new capital is committed."]},
             "balanced": {"stance": "SUPPORT", "confidence": 0.75, "summary": "The balanced view supports HOLD because positive and negative evidence are close and uncertainty remains material.", "impact": "Provides the main risk-policy support for the final HOLD decision.", "key_points": ["Evidence is mixed.", "Current exposure should remain unchanged."]},
             "conservative": {"stance": "CAUTIOUS", "confidence": 0.71, "summary": "The conservative view accepts HOLD only with monitoring. It rejects increasing exposure while evidence depth is limited.", "impact": "Reduces confidence and adds a warning against a new BUY position.", "key_points": ["Capital protection has priority.", "Limited data requires a wider safety margin."]},
         }
-        return {"profile": profile, "max_risk": 0.4, "proposal": inputs, **views[profile]}
+        return {
+            "profile": risk_profile,
+            "max_risk": 0.4,
+            "proposal": inputs,
+            **views[risk_profile],
+        }
     if node.type == "risk_join":
         return {"views": inputs}
     if node.type == "decision_validator":

@@ -15,6 +15,7 @@ from omnitrade.auth import LoginRequest, User, authenticate, current_user, issue
 from omnitrade.config import get_settings
 from omnitrade.contracts import (
     Checkpoint,
+    FailurePolicy,
     NodeRun,
     NodeStatus,
     Run,
@@ -348,6 +349,8 @@ def list_reports(user: User = Depends(current_user)) -> list[dict[str, object]]:
         if not result or not result.get("report"):
             continue
         report_data = cast(dict[str, object], result["report"])
+        decision_value = report_data.get("decision")
+        decision = cast(dict[str, object], decision_value) if isinstance(decision_value, dict) else {}
         reports.append(
             {
                 "run_id": run.id,
@@ -355,12 +358,8 @@ def list_reports(user: User = Depends(current_user)) -> list[dict[str, object]]:
                 "as_of": run.as_of,
                 "created_at": run.created_at,
                 "status": run.status,
-                "action": report_data.get("decision", {}).get("action", "NO_DECISION")
-                if isinstance(report_data.get("decision"), dict)
-                else "NO_DECISION",
-                "confidence": report_data.get("decision", {}).get("confidence", 0)
-                if isinstance(report_data.get("decision"), dict)
-                else 0,
+                "action": decision.get("action", "NO_DECISION"),
+                "confidence": decision.get("confidence", 0),
             }
         )
     return reports
@@ -498,7 +497,7 @@ def _configured_definition(definition: WorkflowDefinition, run: Run) -> Workflow
         elif node.type == "time_guard":
             node.config["max_age_hours"] = run.configuration.evidence_freshness_hours
         if not run.configuration.allow_degraded:
-            node.failure_policy = "required"
+            node.failure_policy = FailurePolicy.REQUIRED
     analyst_nodes = {
         "market": "market_analyst",
         "fundamentals": "fundamental_analyst",

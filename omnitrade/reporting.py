@@ -154,10 +154,10 @@ def _content_hashes(value: Any) -> list[str]:
             hashes.extend(_content_hashes(child))
         return list(dict.fromkeys(hashes))
     if isinstance(value, list):
-        hashes: list[str] = []
+        list_hashes: list[str] = []
         for child in value:
-            hashes.extend(_content_hashes(child))
-        return list(dict.fromkeys(hashes))
+            list_hashes.extend(_content_hashes(child))
+        return list(dict.fromkeys(list_hashes))
     return []
 
 
