@@ -12,7 +12,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from omnitrade.config import get_settings
 from omnitrade.contracts import Run, RunEvent, UserProfile, WorkflowDefinition, WorkflowVersion
-from omnitrade.db import EventRow, ProfileRow, ReportRow, RunRow, WorkflowRow, WorkflowVersionRow, engine
+from omnitrade.db import (
+    EventRow,
+    ProfileRow,
+    ReportRow,
+    RunRow,
+    WorkflowRow,
+    WorkflowVersionRow,
+    engine,
+)
 
 
 class NotFoundError(KeyError):

@@ -21,7 +21,6 @@ from reportlab.platypus import (
 
 from omnitrade.contracts import Run
 
-
 ANALYSTS = {
     "market_analyst": "Market Analyst",
     "fundamental_analyst": "Fundamental Analyst",

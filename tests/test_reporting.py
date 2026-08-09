@@ -5,9 +5,9 @@ from uuid import uuid4
 
 from pypdf import PdfReader
 
+from omnitrade.contracts import Run
 from omnitrade.engine.executors import deterministic_executors
 from omnitrade.engine.runtime import WorkflowRuntime
-from omnitrade.contracts import Run
 from omnitrade.reporting import build_detailed_report, render_pdf
 from omnitrade.sample_workflow import defense_workflow
 
