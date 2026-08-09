@@ -1,0 +1,17 @@
+export interface ValidationIssue{code:string;message:string;node_id?:string;edge_id?:string}
+export interface ValidationResult{valid:boolean;errors:ValidationIssue[];warnings:ValidationIssue[]}
+export interface WorkflowRecord{id:string;definition:{name:string;description:string;nodes:unknown[];edges:unknown[];budget?:Budget};version:number;published_version_id?:string}
+export interface Budget{max_runtime_seconds:number;max_model_calls:number;max_provider_calls:number;max_tokens:number;max_parallel_nodes:number}
+export interface RunConfiguration{data_mode:string;analysts:string[];research_depth:number;risk_profile:string;report_detail:string;output_language:string;base_currency:string;allow_degraded:boolean;evidence_freshness_hours:number;quick_model:string;deep_model:string}
+export interface Run{id:string;workflow_version_id:string;ticker:string;as_of:string;status:string;trace_id:string;degraded_reasons:string[];configuration:RunConfiguration;budget_override?:Budget;created_at:string;updated_at:string}
+export interface UserProfile{display_name:string;email:string;default_ticker:string;default_configuration:RunConfiguration}
+export interface ReportSummary{run_id:string;ticker:string;as_of:string;created_at:string;status:string;action:string;confidence:number}
+export interface AgentAnalysis{node_id:string;agent:string;viewpoint:string;confidence:number;summary:string;key_points:string[];risks:string[];evidence_refs:string[]}
+export interface DebateCase{agent:string;stance:string;confidence:number;summary:string;key_points:string[];counterpoints:string[]}
+export interface RiskAnalysis{agent:string;stance:string;confidence:number;summary:string;impact:string;key_points:string[]}
+export interface EvidenceOverview{source:string;status:string;summary:string;content_hashes:string[]}
+export interface ReportData{report_version?:string;title:string;ticker:string;as_of:string;generated_at:string;executive_summary:string;decision:{action:string;confidence:number;rationale:string;key_factors:string[];warnings:string[]};sections:{title:string;summary:string}[];agent_analyses?:AgentAnalysis[];research_debate?:{bull_case?:DebateCase;bear_case?:DebateCase;manager_conclusion?:string;round_limit?:number};trading_proposal?:{action?:string;confidence?:number;summary?:string;conditions?:string[]};risk_analyses?:RiskAnalysis[];evidence_overview?:EvidenceOverview[];workflow_summary?:{workflow_version_id?:string;trace_id?:string;node_statuses?:Record<string,string>;selected_agents?:string[]};analysis_settings:RunConfiguration;lineage_complete:boolean;disclaimer:string}
+export interface RunEvent{event_id:string;event_type:string;run_id:string;node_id?:string;occurred_at:string;payload:Record<string,unknown>}
+export interface RunActivity{run:Run;events:RunEvent[];nodes:Record<string,{status:string;output?:unknown;error?:string}>}
+export interface AnalysisOptions{tickers:string[];quick_models:string[];deep_models:string[];languages:string[];currencies:string[];data_modes:string[]}
+export interface CatalogSuggestion{node_type:string;source_port:string;target_port:string;data_type:string}
