@@ -38,6 +38,9 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-25 | Docker analysis runs reject recorded evidence and unverified providers instead of silently using prepared data. | Run precondition and provider-chain tests |
 | FR-26 | Model choices cover the providers and model modes offered by the TradingAgents reference, including local, cloud, Bedrock and custom compatible endpoints. | Connection catalog and model-discovery tests |
 | FR-27 | Investment horizon, experience, loss limit, position limit and excluded sectors change prompts, risk thresholds, decision validation or report guidance. | Policy executor tests and report inspection |
+| FR-28 | Configuration pages show a selector only when at least two valid choices exist; one choice is applied automatically and no choices produce an actionable setup message. | Adaptive-control unit test and browser inspection |
+| FR-29 | Amazon Bedrock accepts either a Bedrock bearer token or temporary AWS credentials and exposes all user-configured model IDs to analysis. | Bearer-header test, secret-redaction test and live verification |
+| FR-30 | A topic-based in-app guide explains the complete login-to-report workflow and common provider problems. | How-to page and user guide review |
 
 ## Quality requirements
 

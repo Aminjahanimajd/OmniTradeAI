@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Chip,
   FormControlLabel, Grid, MenuItem, Slider, Stack, Switch, TextField, Typography,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -36,6 +36,18 @@ export function latestPublishedWorkflows(items: WorkflowRecord[]): WorkflowRecor
   return [...latest.values()].sort((left, right) => left.definition.name.localeCompare(right.definition.name));
 }
 
+export function optionControlMode(values: string[]): 'empty' | 'fixed' | 'select' {
+  if (!values.length) return 'empty';
+  return values.length === 1 ? 'fixed' : 'select';
+}
+
+function FixedOption({ label, value }: { label: string; value: string }) {
+  return <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, p: 1.4, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+    <Typography variant="body2" color="text.secondary">{label}</Typography>
+    <Chip label={value.replaceAll('_', ' ')} color="primary" variant="outlined"/>
+  </Box>;
+}
+
 export default function AnalysisPage({ onCreated }: { onCreated: (id: string) => void }) {
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [options, setOptions] = useState(emptyOptions);
@@ -57,17 +69,22 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         setTicker(available.tickers.includes(profile.default_ticker) ? profile.default_ticker : available.tickers[0] ?? 'AAPL');
         const modelProvider = available.model_providers.includes(profile.default_configuration.model_provider) ? profile.default_configuration.model_provider : available.model_providers[0] ?? 'fixture';
         const models = available.provider_models[modelProvider] ?? available.quick_models;
+        const chain = (preferred: string[], capability: string) => {
+          const candidates = available.data_providers.filter(name => available.data_provider_capabilities[name]?.includes(capability));
+          const selected = preferred.filter(name => candidates.includes(name));
+          return selected.length ? selected : candidates.slice(0, 1);
+        };
         setConfig({
           ...profile.default_configuration,
           data_mode: available.data_modes.includes(profile.default_configuration.data_mode) ? profile.default_configuration.data_mode : available.data_modes[0] ?? 'live',
           model_provider: modelProvider,
           quick_model: models.includes(profile.default_configuration.quick_model) ? profile.default_configuration.quick_model : models[0] ?? '',
-          deep_model: models.includes(profile.default_configuration.deep_model) ? profile.default_configuration.deep_model : models[0] ?? '',
-          market_providers: profile.default_configuration.market_providers.filter(name=>available.data_providers.includes(name)),
-          fundamental_providers: profile.default_configuration.fundamental_providers.filter(name=>available.data_providers.includes(name)),
-          news_providers: profile.default_configuration.news_providers.filter(name=>available.data_providers.includes(name)),
-          sentiment_providers: profile.default_configuration.sentiment_providers.filter(name=>available.data_providers.includes(name)),
-          macro_providers: profile.default_configuration.macro_providers.filter(name=>available.data_providers.includes(name)),
+          deep_model: models.includes(profile.default_configuration.deep_model) ? profile.default_configuration.deep_model : models.at(-1) ?? '',
+          market_providers: chain(profile.default_configuration.market_providers, 'market'),
+          fundamental_providers: chain(profile.default_configuration.fundamental_providers, 'fundamentals'),
+          news_providers: chain(profile.default_configuration.news_providers, 'news'),
+          sentiment_providers: chain(profile.default_configuration.sentiment_providers, 'sentiment'),
+          macro_providers: chain(profile.default_configuration.macro_providers, 'macro'),
         });
       })
       .catch(error => setMessage(String(error)));
@@ -81,6 +98,14 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
       ? config.analysts.filter(value => value !== name)
       : [...config.analysts, name],
   );
+  const chainFields = [
+    ['market_providers', 'Market data chain', 'market'],
+    ['fundamental_providers', 'Fundamental data chain', 'fundamentals'],
+    ['news_providers', 'News data chain', 'news'],
+    ['sentiment_providers', 'Social sentiment chain', 'sentiment'],
+    ['macro_providers', 'Macro data chain', 'macro'],
+  ] as [keyof RunConfiguration, string, string][];
+  const providerModels = options.provider_models[config.model_provider] ?? [];
 
   async function start() {
     setBusy(true);
@@ -110,19 +135,25 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         <Card><CardContent>
           <Typography variant="h6" fontWeight={800} gutterBottom>1. Instrument and workflow</Typography>
           <Stack spacing={2}>
-            <TextField select label="Published workflow" value={version} onChange={event => setVersion(event.target.value)}>
+            {workflows.length > 1 ? <TextField select label="Published workflow" value={version} onChange={event => setVersion(event.target.value)}>
               {workflows.map(workflow => <MenuItem key={workflow.published_version_id} value={workflow.published_version_id}>{workflow.definition.name} - version {workflow.version}</MenuItem>)}
-            </TextField>
+            </TextField> : workflows.length === 1 ? <FixedOption label="Workflow" value={`${workflows[0].definition.name} · version ${workflows[0].version}`}/> : null}
             <Autocomplete
               disableClearable options={options.tickers} value={ticker}
               onChange={(_, value) => setTicker(value)}
               renderInput={params => <TextField {...params} label="Stock ticker" helperText="Only supported stock symbols are listed" />}
             />
             <TextField label="Analysis date" type="date" value={date} inputProps={{ max: new Date().toISOString().slice(0, 10) }} onChange={event => setDate(event.target.value)} InputLabelProps={{ shrink: true }} />
-            <TextField select label="Data mode" value={config.data_mode} onChange={event => update('data_mode', event.target.value)}>
+            {options.data_modes.length > 1 ? <TextField select label="Data mode" value={config.data_mode} onChange={event => update('data_mode', event.target.value)}>
               {options.data_modes.map(mode => <MenuItem value={mode} key={mode}>{mode === 'recorded' ? 'Recorded data - tests only' : 'Real provider data'}</MenuItem>)}
-            </TextField>
-            {([['market_providers','Market data chain','market'],['fundamental_providers','Fundamental data chain','fundamentals'],['news_providers','News data chain','news'],['sentiment_providers','Social sentiment chain','sentiment'],['macro_providers','Macro data chain','macro']] as [keyof RunConfiguration,string,string][]).map(([key,label,capability])=><TextField key={key} select SelectProps={{multiple:true}} label={label} value={config[key] as string[]} onChange={event=>update(key,event.target.value as RunConfiguration[typeof key])}>{options.data_providers.filter(name=>options.data_provider_capabilities[name]?.includes(capability)).map(name=><MenuItem key={name} value={name}>{name.replaceAll('_',' ')}</MenuItem>)}</TextField>)}
+            </TextField> : <Alert severity="success">Real verified data is always used. Test fixtures are not available here.</Alert>}
+            {chainFields.map(([key, label, capability]) => {
+              const values = options.data_providers.filter(name => options.data_provider_capabilities[name]?.includes(capability));
+              const mode = optionControlMode(values);
+              if (mode === 'empty') return <Alert key={key} severity="warning">No verified {label.toLowerCase()}. Connect one in Connections.</Alert>;
+              if (mode === 'fixed') return <FixedOption key={key} label={label} value={values[0]}/>;
+              return <TextField key={key} select SelectProps={{ multiple: true }} label={label} value={config[key] as string[]} onChange={event => update(key, event.target.value as RunConfiguration[typeof key])}>{values.map(name => <MenuItem key={name} value={name}>{name.replaceAll('_', ' ')}</MenuItem>)}</TextField>;
+            })}
           </Stack>
         </CardContent></Card>
       </Grid>
@@ -145,15 +176,17 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         <Card><CardContent>
           <Typography variant="h6" fontWeight={800} gutterBottom>3. Models and report</Typography>
           <Stack spacing={2}>
-            <TextField select label="Model provider" value={config.model_provider} onChange={event => {const name=event.target.value;const models=options.provider_models[name]??[];setConfig(current=>({...current,model_provider:name,quick_model:models[0]??'',deep_model:models[0]??''}))}}>
-              {options.model_providers.map(name => <MenuItem value={name} key={name}>{name.replaceAll('_',' ')}</MenuItem>)}
-            </TextField>
-            <TextField select label="Quick analysis model" value={config.quick_model} onChange={event => update('quick_model', event.target.value)}>
-              {(options.provider_models[config.model_provider]??[]).map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
-            </TextField>
-            <TextField select label="Deep reasoning model" value={config.deep_model} onChange={event => update('deep_model', event.target.value)}>
-              {(options.provider_models[config.model_provider]??[]).map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
-            </TextField>
+            {optionControlMode(options.model_providers) === 'empty' ? <Alert severity="warning">No verified AI provider. Connect and verify one in Connections.</Alert> : optionControlMode(options.model_providers) === 'fixed' ? <FixedOption label="Model provider" value={options.model_providers[0]}/> : <TextField select label="Model provider" value={config.model_provider} onChange={event => { const name = event.target.value; const models = options.provider_models[name] ?? []; setConfig(current => ({ ...current, model_provider: name, quick_model: models[0] ?? '', deep_model: models.at(-1) ?? '' })); }}>
+              {options.model_providers.map(name => <MenuItem value={name} key={name}>{name.replaceAll('_', ' ')}</MenuItem>)}
+            </TextField>}
+            {optionControlMode(providerModels) === 'empty' ? <Alert severity="warning">No models are configured for this provider.</Alert> : optionControlMode(providerModels) === 'fixed' ? <FixedOption label="Quick and deep model" value={providerModels[0]}/> : <>
+              <TextField select label="Quick analysis model" value={config.quick_model} onChange={event => update('quick_model', event.target.value)}>
+                {providerModels.map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
+              </TextField>
+              <TextField select label="Deep reasoning model" value={config.deep_model} onChange={event => update('deep_model', event.target.value)}>
+                {providerModels.map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
+              </TextField>
+            </>}
             <TextField select label="Reasoning effort" value={config.reasoning_effort} onChange={event=>update('reasoning_effort',event.target.value)}><MenuItem value="low">Low</MenuItem><MenuItem value="medium">Medium</MenuItem><MenuItem value="high">High</MenuItem></TextField>
             <TextField type="number" label="Temperature (empty uses provider default)" value={config.temperature??''} inputProps={{min:0,max:2,step:0.1}} onChange={event=>update('temperature',event.target.value===''?null:Number(event.target.value))}/>
             <TextField type="number" label="Model retries" value={config.model_max_retries} inputProps={{min:0,max:5}} onChange={event=>update('model_max_retries',Number(event.target.value))}/>

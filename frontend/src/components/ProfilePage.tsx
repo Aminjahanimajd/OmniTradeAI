@@ -1,13 +1,14 @@
 import{useEffect,useState}from'react';
-import{Alert,Button,Card,CardContent,Divider,MenuItem,Stack,TextField,Typography}from'@mui/material';
+import{Alert,Autocomplete,Button,Card,CardContent,Divider,MenuItem,Stack,TextField,Typography}from'@mui/material';
 import SaveIcon from'@mui/icons-material/Save';
-import{getProfile,saveProfile}from'../api';
+import{getAnalysisOptions,getProfile,saveProfile}from'../api';
 import type{UserProfile}from'../types';
 
 export default function ProfilePage(){
   const[profile,setProfile]=useState<UserProfile>();
+  const[tickers,setTickers]=useState<string[]>([]);
   const[message,setMessage]=useState('');
-  useEffect(()=>{void getProfile().then(value=>setProfile({...value,default_configuration:{...value.default_configuration,data_mode:'live'}})).catch(error=>setMessage(String(error)))},[]);
+  useEffect(()=>{void Promise.all([getProfile(),getAnalysisOptions()]).then(([value,options])=>{setProfile({...value,default_configuration:{...value.default_configuration,data_mode:'live'}});setTickers(options.tickers)}).catch(error=>setMessage(String(error)))},[]);
   if(!profile)return<Alert severity="info">Loading profile...</Alert>;
   const config=profile.default_configuration;
   const policy=profile.investor_policy;
@@ -20,8 +21,8 @@ export default function ProfilePage(){
       <Typography variant="h6">Identity and defaults</Typography>
       <TextField label="Display name" value={profile.display_name} onChange={event=>setProfile({...profile,display_name:event.target.value})}/>
       <TextField label="Email (not used for decisions)" value={profile.email} onChange={event=>setProfile({...profile,email:event.target.value})}/>
-      <TextField label="Default stock ticker" value={profile.default_ticker} onChange={event=>setProfile({...profile,default_ticker:event.target.value.toUpperCase()})}/>
-      <TextField select label="Default data mode" value={config.data_mode} onChange={event=>setProfile({...profile,default_configuration:{...config,data_mode:event.target.value}})}><MenuItem value="live">Verified real providers only</MenuItem></TextField>
+      <Autocomplete disableClearable options={tickers} value={profile.default_ticker} onChange={(_,value)=>setProfile({...profile,default_ticker:value})} renderInput={params=><TextField {...params} label="Default stock ticker" helperText="Choose a supported stock symbol"/>}/>
+      <Alert severity="success">All normal analyses use verified real provider data. There is no fake-data mode to select.</Alert>
       <TextField select label="Default risk profile" value={config.risk_profile} onChange={event=>setProfile({...profile,default_configuration:{...config,risk_profile:event.target.value}})}><MenuItem value="conservative">Conservative</MenuItem><MenuItem value="balanced">Balanced</MenuItem><MenuItem value="aggressive">Aggressive</MenuItem></TextField>
       <TextField type="number" label="Default research depth" value={config.research_depth} onChange={event=>setProfile({...profile,default_configuration:{...config,research_depth:Number(event.target.value)}})}/>
       <TextField select label="Default report detail" value={config.report_detail} onChange={event=>setProfile({...profile,default_configuration:{...config,report_detail:event.target.value}})}><MenuItem value="summary">Summary</MenuItem><MenuItem value="standard">Standard</MenuItem><MenuItem value="detailed">Detailed</MenuItem></TextField>

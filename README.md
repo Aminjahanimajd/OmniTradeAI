@@ -34,6 +34,7 @@ positions, and produces an explainable report with evidence lineage.
 - [Testing and quality](#testing-and-quality)
 - [Project structure](#project-structure)
 - [Engineering documentation](#engineering-documentation)
+- [User guide](docs/USER_GUIDE.md)
 - [Current limitations](#current-limitations)
 - [Academic team](#academic-team)
 
@@ -60,7 +61,7 @@ only as study references; their workflow code was not copied or renamed.
 | Area | What the user can do |
 |---|---|
 | Connections | Add private provider credentials, discover models, and verify each real connection before use. |
-| New Analysis | Select a stock, analysts, research depth, risk profile, models, data mode, report detail, language, currency, freshness, and budgets. |
+| New Analysis | Select a stock, analysts, research depth, risk profile, models, real provider chains, report detail, language, currency, freshness, and budgets. |
 | Agent Room | Follow real workflow events and read the output and impact of each agent. |
 | Reports | Browse saved reports by calendar, compare agent views, inspect evidence, and export PDF or JSON. |
 | Workflow Lab | Build, undo, validate, publish, and run typed workflow graphs with smart connection suggestions. |
@@ -199,6 +200,10 @@ MiniMax, OpenRouter, Mistral, Kimi, Groq, NVIDIA NIM, Azure OpenAI, Amazon
 Bedrock, Ollama, and other OpenAI-compatible servers. Data connections cover
 Yahoo Finance, Alpha Vantage, FRED, Polymarket, StockTwits, and Reddit public feeds.
 
+Amazon Bedrock accepts either an AWS Bedrock bearer token or standard temporary
+AWS credentials. The user can register several Bedrock model IDs and choose
+different quick and deep models for each analysis.
+
 Investor profile values are active workflow inputs. The investment horizon
 changes analysis thresholds, the maximum acceptable loss changes risk checks,
 the position limit changes decision guidance, excluded sectors can block a
@@ -293,6 +298,7 @@ OmniTradeAI/
 - [ADR 0001: Custom event engine](docs/adr/0001-custom-event-engine.md)
 - [ADR 0002: Modular services](docs/adr/0002-modular-services.md)
 - [Reuse register](docs/reuse-register.md)
+- [Complete user guide](docs/USER_GUIDE.md)
 
 ## Current limitations
 

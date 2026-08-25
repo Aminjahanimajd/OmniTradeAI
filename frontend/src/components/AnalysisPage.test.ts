@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { latestPublishedWorkflows } from './AnalysisPage';
+import { latestPublishedWorkflows, optionControlMode } from './AnalysisPage';
 import type { WorkflowRecord } from '../types';
 
 function workflow(id: string, name: string, version: number): WorkflowRecord {
@@ -21,5 +21,13 @@ describe('latestPublishedWorkflows', () => {
 
     expect(result).toHaveLength(2);
     expect(result.find(item => item.definition.name.startsWith('Complete'))?.id).toBe('new');
+  });
+});
+
+describe('optionControlMode', () => {
+  it('never renders a useless one-option selector', () => {
+    expect(optionControlMode([])).toBe('empty');
+    expect(optionControlMode(['only'])).toBe('fixed');
+    expect(optionControlMode(['first', 'second'])).toBe('select');
   });
 });

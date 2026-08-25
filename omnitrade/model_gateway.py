@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Protocol, TypeVar
+from urllib.parse import quote
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -105,6 +106,28 @@ class BedrockClient:
 
     async def complete(self, prompt: str) -> str:
         import asyncio
+
+        bearer_token = self.settings.get("aws_bearer_token_bedrock")
+        if bearer_token:
+            region = self.settings.get("region") or "us-east-1"
+            model_path = quote(self.model, safe=".:-_")
+            async with httpx.AsyncClient(timeout=90) as client:
+                response = await client.post(
+                    f"https://bedrock-runtime.{region}.amazonaws.com/model/{model_path}/converse",
+                    headers={
+                        "Authorization": f"Bearer {bearer_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "messages": [{"role": "user", "content": [{"text": prompt}]}],
+                        "inferenceConfig": {
+                            **({"temperature": self.temperature} if self.temperature is not None else {}),
+                            "maxTokens": 1800,
+                        },
+                    },
+                )
+                response.raise_for_status()
+                return str(response.json()["output"]["message"]["content"][0]["text"])
 
         def call() -> str:
             try:

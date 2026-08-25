@@ -19,7 +19,9 @@ class ConnectionInput(BaseModel):
     api_key: SecretStr | None = None
     base_url: str | None = Field(default=None, max_length=500)
     test_model: str | None = Field(default=None, max_length=180)
+    model_ids: list[str] = Field(default_factory=list, max_length=50)
     region: str | None = Field(default=None, max_length=50)
+    aws_bearer_token_bedrock: SecretStr | None = None
     aws_access_key_id: SecretStr | None = None
     aws_secret_access_key: SecretStr | None = None
     aws_session_token: SecretStr | None = None
@@ -31,7 +33,15 @@ class ConnectionInput(BaseModel):
             value = getattr(self, name)
             if value:
                 values[name] = value
-        for name in ("api_key", "aws_access_key_id", "aws_secret_access_key", "aws_session_token"):
+        if self.model_ids:
+            values["model_ids"] = "\n".join(dict.fromkeys(self.model_ids))
+        for name in (
+            "api_key",
+            "aws_bearer_token_bedrock",
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "aws_session_token",
+        ):
             value = getattr(self, name)
             if value:
                 values[name] = value.get_secret_value()
@@ -46,6 +56,7 @@ class ConnectionStatus(BaseModel):
     message: str = "Not configured"
     base_url: str | None = None
     test_model: str | None = None
+    models: list[str] = Field(default_factory=list)
 
 
 @dataclass
@@ -55,8 +66,20 @@ class SessionConnectionStore:
     _models: dict[tuple[UUID, str], list[str]] = field(default_factory=dict)
 
     def put(self, user_id: UUID, value: ConnectionInput) -> ConnectionStatus:
+        current = self.get(user_id, value.provider)
+        if current:
+            for secret_name in (
+                "api_key",
+                "aws_bearer_token_bedrock",
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "aws_session_token",
+            ):
+                if getattr(value, secret_name) is None:
+                    setattr(value, secret_name, getattr(current, secret_name))
         self._values.setdefault(user_id, {})[value.provider] = value
         self._verification.pop((user_id, value.provider), None)
+        self._models.pop((user_id, value.provider), None)
         return self.status(user_id, value.provider)
 
     def delete(self, user_id: UUID, provider: str) -> None:
@@ -86,6 +109,7 @@ class SessionConnectionStore:
             message=message if value else "Not configured",
             base_url=value.base_url if value else spec.get("base_url"),
             test_model=value.test_model if value else None,
+            models=self.models(user_id, provider) if value else list(spec.get("models", [])),
         )
 
     def statuses(self, user_id: UUID) -> list[ConnectionStatus]:
@@ -99,7 +123,10 @@ class SessionConnectionStore:
 
     def models(self, user_id: UUID, provider: str) -> list[str]:
         discovered = self._models.get((user_id, provider), [])
-        return discovered or list(MODEL_PROVIDERS.get(provider, {}).get("models", []))
+        value = self.get(user_id, provider)
+        configured = (value.model_ids + ([value.test_model] if value.test_model else [])) if value else []
+        catalog = list(MODEL_PROVIDERS.get(provider, {}).get("models", []))
+        return list(dict.fromkeys(discovered or configured or catalog))
 
 
 MODEL_PROVIDERS: dict[str, dict[str, Any]] = {
@@ -182,6 +209,9 @@ async def discover_models(value: ConnectionInput) -> list[str]:
     spec = MODEL_PROVIDERS.get(value.provider)
     if not spec:
         raise ValueError("This is not a model provider")
+    if value.provider == "bedrock":
+        models = value.model_ids + ([value.test_model] if value.test_model else [])
+        return list(dict.fromkeys(model for model in models if model))
     if spec.get("models") and value.provider not in {"ollama", "openrouter"}:
         return list(spec["models"])
     runtime = value.runtime_dict()

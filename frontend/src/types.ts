@@ -17,5 +17,5 @@ export interface RunActivity{run:Run;events:RunEvent[];nodes:Record<string,{stat
 export interface AnalysisOptions{tickers:string[];quick_models:string[];deep_models:string[];languages:string[];currencies:string[];data_modes:string[];model_providers:string[];provider_models:Record<string,string[]>;data_providers:string[];data_provider_capabilities:Record<string,string[]>}
 export interface CatalogSuggestion{node_type:string;source_port:string;target_port:string;data_type:string}
 export interface ConnectionSpec{label:string;category:'model'|'data';base_url?:string;key_optional:boolean;models:string[];capabilities:string[]}
-export interface ConnectionStatus{provider:string;category:string;configured:boolean;verified:boolean;message:string;base_url?:string;test_model?:string}
-export interface ConnectionInput{provider:string;api_key?:string;base_url?:string;test_model?:string;region?:string;aws_access_key_id?:string;aws_secret_access_key?:string;aws_session_token?:string;azure_api_version?:string}
+export interface ConnectionStatus{provider:string;category:string;configured:boolean;verified:boolean;message:string;base_url?:string;test_model?:string;models:string[]}
+export interface ConnectionInput{provider:string;api_key?:string;base_url?:string;test_model?:string;model_ids?:string[];region?:string;aws_bearer_token_bedrock?:string;aws_access_key_id?:string;aws_secret_access_key?:string;aws_session_token?:string;azure_api_version?:string}

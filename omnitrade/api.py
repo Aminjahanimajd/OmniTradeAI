@@ -33,6 +33,7 @@ from omnitrade.contracts import (
     UserProfile,
     WorkflowDefinition,
 )
+from omnitrade.engine.catalog import NODE_CATALOG
 from omnitrade.engine.executors import deterministic_executors
 from omnitrade.engine.runtime import WorkflowRuntime
 from omnitrade.engine.validator import WorkflowValidator
@@ -600,6 +601,9 @@ def _configured_definition(definition: WorkflowDefinition, run: Run) -> Workflow
     if run.budget_override:
         configured.budget = run.budget_override
     for node in configured.nodes:
+        if NODE_CATALOG[node.type].model_cost:
+            retry_timeout = 100 * (run.configuration.model_max_retries + 1)
+            node.timeout_seconds = max(node.timeout_seconds, min(300, retry_timeout))
         if node.type == "bounded_loop":
             node.config["max_iterations"] = run.configuration.research_depth
         elif node.type == "time_guard":

@@ -10,6 +10,10 @@ suggestions and connections. FR-23 maps the node description catalog to the
 selected-node help panel in Workflow Lab.
 FR-24-27 map the Connections tab, session connection registry, real provider
 adapters, model gateway, run preconditions, profile policy and report outputs.
+FR-28 maps option cardinality to adaptive New Analysis and Profile controls.
+FR-29 maps Bedrock bearer-token input to the direct Converse client, configured
+model list, redaction tests and live verification. FR-30 maps the in-app How to
+Use page to `docs/USER_GUIDE.md`.
 
 | Requirement | Components | Main verification |
 |---|---|---|
@@ -28,3 +32,6 @@ adapters, model gateway, run preconditions, profile policy and report outputs.
 | FR-24-25 | connection API, session registry, run preconditions, real provider chains | `test_api.py`, `test_providers.py` |
 | FR-26 | provider catalog, model discovery, OpenAI-compatible and native clients | model gateway tests and live verification |
 | FR-27 | profile, agent prompt context, risk and decision executors | runtime and report tests |
+| FR-28 | adaptive selectors and fixed-option summaries | `AnalysisPage.test.ts` and browser inspection |
+| FR-29 | Bedrock connection input, direct Converse client and model list | `test_model_gateway.py`, `test_api.py`, live check |
+| FR-30 | How to Use tab and user guide | content review |

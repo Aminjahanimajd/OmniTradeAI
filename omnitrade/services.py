@@ -22,7 +22,12 @@ from omnitrade.engine.executors import deterministic_executor
 from omnitrade.engine.runtime import ExecutionContext, NodeExecutor, WorkflowRuntime
 from omnitrade.engine.validator import WorkflowValidator
 from omnitrade.infrastructure.events import RedisStreamEventBus
-from omnitrade.model_gateway import build_model_client, extract_json_object
+from omnitrade.model_gateway import (
+    InvalidModelOutput,
+    ModelClient,
+    build_model_client,
+    extract_json_object,
+)
 from omnitrade.providers import convert_evidence_currency, fetch_from_chain
 
 
@@ -86,6 +91,53 @@ report_app = base_service("report")
 workflow_app = base_service("workflow")
 
 
+def merge_model_narrative(
+    draft: Any,
+    proposed: Any,
+    protected_keys: set[str] | None = None,
+) -> Any:
+    """Keep backend-controlled structure while accepting model-written narrative text."""
+
+    protected = protected_keys or set()
+    if isinstance(draft, dict):
+        candidate = proposed if isinstance(proposed, dict) else {}
+        return {
+            key: (
+                value
+                if key in protected
+                else merge_model_narrative(value, candidate.get(key), protected)
+            )
+            for key, value in draft.items()
+        }
+    if isinstance(draft, list):
+        if not isinstance(proposed, list) or len(proposed) != len(draft):
+            return draft
+        return [
+            merge_model_narrative(value, proposed[index], protected)
+            for index, value in enumerate(draft)
+        ]
+    if isinstance(draft, str) and isinstance(proposed, str) and proposed.strip():
+        return proposed.strip()
+    return draft
+
+
+async def complete_json_with_retries(
+    client: ModelClient,
+    prompt: str,
+    max_retries: int,
+) -> dict[str, Any]:
+    """Retry malformed model JSON and use an empty proposal if formatting stays invalid."""
+
+    for attempt in range(max_retries + 1):
+        try:
+            return extract_json_object(await client.complete(prompt))
+        except (json.JSONDecodeError, InvalidModelOutput):
+            if attempt >= max_retries:
+                return {}
+            await asyncio.sleep(min(2**attempt, 8))
+    return {}
+
+
 @evidence_app.post("/internal/nodes/execute", response_model=NodeResult)
 async def evidence_execute(task: NodeTask) -> NodeResult:
     group = NODE_CATALOG[task.node.type].group
@@ -120,24 +172,36 @@ async def model_execute(task: NodeTask) -> NodeResult:
         + json.dumps({"draft": draft, "inputs": task.inputs}, default=str)
     )
     last_error: Exception | None = None
-    raw = ""
+    proposed: dict[str, Any] = {}
     for attempt in range(config.model_max_retries + 1):
         try:
-            raw = await build_model_client(connection, model, config.temperature).complete(prompt)
+            proposed = await complete_json_with_retries(
+                build_model_client(connection, model, config.temperature),
+                prompt,
+                config.model_max_retries,
+            )
             break
         except (httpx.HTTPError, TimeoutError) as exc:
             last_error = exc
             if attempt >= config.model_max_retries:
                 raise
             await asyncio.sleep(min(2**attempt, 8))
-    if not raw and last_error:
+    if not proposed and last_error:
         raise last_error
-    output = extract_json_object(raw)
-    if set(output) != set(draft) or any(not isinstance(output[key], type(value)) for key, value in draft.items() if value is not None):
-        raise ValueError("Model output does not match the required agent contract")
-    for protected in ("evidence_refs", "claims", "signal_score", "sector"):
-        if protected in draft:
-            output[protected] = draft[protected]
+    output = merge_model_narrative(
+        draft,
+        proposed,
+        {
+            "evidence_refs",
+            "claims",
+            "signal_score",
+            "sector",
+            "action",
+            "confidence",
+            "round",
+            "stopped",
+        },
+    )
     return NodeResult(output=output)
 
 
@@ -158,15 +222,27 @@ async def report_execute(task: NodeTask) -> NodeResult:
         f"Write narrative text in {config.output_language} at {config.report_detail} detail for a {task.run.investor_policy.experience_level} user.\n"
         + json.dumps(draft, default=str)
     )
-    output = extract_json_object(await build_model_client(connection, config.deep_model, config.temperature).complete(prompt))
-    if set(output) != set(draft):
-        raise ValueError("Model report does not match the required report contract")
-    for protected in ("ticker", "as_of", "generated_at", "analysis_settings", "investor_policy", "lineage_complete", "disclaimer", "report_version"):
-        output[protected] = draft[protected]
-    if not isinstance(output.get("decision"), dict):
-        raise ValueError("Model report decision must be an object")
-    output["decision"]["action"] = draft["decision"]["action"]
-    output["decision"]["confidence"] = draft["decision"]["confidence"]
+    proposed = await complete_json_with_retries(
+        build_model_client(connection, config.deep_model, config.temperature),
+        prompt,
+        config.model_max_retries,
+    )
+    output = merge_model_narrative(
+        draft,
+        proposed,
+        {
+            "ticker",
+            "as_of",
+            "generated_at",
+            "analysis_settings",
+            "investor_policy",
+            "lineage_complete",
+            "disclaimer",
+            "report_version",
+            "action",
+            "confidence",
+        },
+    )
     return NodeResult(output=output)
 
 

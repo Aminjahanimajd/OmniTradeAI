@@ -1,6 +1,12 @@
+from datetime import UTC, datetime
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 
-from omnitrade.api import app
+from omnitrade.api import _configured_definition, app
+from omnitrade.contracts import Run, RunConfiguration
+from omnitrade.engine.catalog import NODE_CATALOG
+from omnitrade.sample_workflow import defense_workflow
 from omnitrade.storage import store
 
 
@@ -8,6 +14,22 @@ def auth(client: TestClient) -> dict[str, str]:
     response = client.post("/api/v1/auth/login", json={"username": "demo", "password": "demo"})
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def test_model_node_timeout_allows_configured_retries() -> None:
+    run = Run(
+        workflow_version_id=uuid4(),
+        owner_id=uuid4(),
+        ticker="AAPL",
+        as_of=datetime.now(UTC),
+        configuration=RunConfiguration(model_max_retries=2),
+    )
+
+    configured = _configured_definition(defense_workflow(), run)
+
+    model_nodes = [node for node in configured.nodes if NODE_CATALOG[node.type].model_cost]
+    assert model_nodes
+    assert all(node.timeout_seconds == 300 for node in model_nodes)
 
 
 def test_complete_browser_api_scenario() -> None:
@@ -77,6 +99,23 @@ def test_connection_credentials_are_write_only() -> None:
         assert "secret-value" not in saved.text
         listed = client.get("/api/v1/connections", headers=headers)
         assert "secret-value" not in listed.text
+        bedrock = client.put(
+            "/api/v1/connections/bedrock",
+            headers=headers,
+            json={
+                "provider": "bedrock",
+                "aws_bearer_token_bedrock": "private-bedrock-token",
+                "region": "us-east-1",
+                "test_model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                "model_ids": [
+                    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                    "us.anthropic.claude-sonnet-4-6",
+                ],
+            },
+        )
+        assert bedrock.status_code == 200
+        assert "private-bedrock-token" not in bedrock.text
+        assert len(bedrock.json()["models"]) == 2
 
 
 def test_sample_workflow_creation_is_idempotent() -> None:
