@@ -18,24 +18,24 @@ services:
   api:
     build: {context: ., dockerfile: Dockerfile.backend}
     command: uvicorn omnitrade.api:app --host 0.0.0.0 --port 8000
-    environment: {OMNITRADE_ENV: compose, OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0", OMNITRADE_JWT_SECRET: "local-compose-change-me-must-be-replaced"}
+    environment: {OMNITRADE_ENV: compose, OMNITRADE_FIXTURE_MODE: "false", OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0", OMNITRADE_JWT_SECRET: "local-compose-change-me-must-be-replaced"}
     ports: ["8000:8000"]
     volumes: [artifacts:/data/artifacts]
     depends_on: {migrate: {condition: service_completed_successfully}, redis: {condition: service_healthy}, workflow: {condition: service_started}}
   workflow:
     build: {context: ., dockerfile: Dockerfile.backend}
     command: uvicorn omnitrade.services:workflow_app --host 0.0.0.0 --port 8001
-    environment: {OMNITRADE_ENV: compose, OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0"}
+    environment: {OMNITRADE_ENV: compose, OMNITRADE_FIXTURE_MODE: "false", OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0"}
     depends_on: {migrate: {condition: service_completed_successfully}, redis: {condition: service_healthy}}
   evidence:
     build: {context: ., dockerfile: Dockerfile.backend}
     command: uvicorn omnitrade.services:evidence_app --host 0.0.0.0 --port 8002
-    environment: {OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0"}
+    environment: {OMNITRADE_FIXTURE_MODE: "false", OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0"}
     depends_on: {migrate: {condition: service_completed_successfully}, redis: {condition: service_healthy}}
   model-gateway:
     build: {context: ., dockerfile: Dockerfile.backend}
     command: uvicorn omnitrade.services:model_app --host 0.0.0.0 --port 8003
-    environment: {OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0"}
+    environment: {OMNITRADE_FIXTURE_MODE: "false", OMNITRADE_DATABASE_URL: "postgresql+psycopg://omnitrade:omnitrade@postgres:5432/omnitrade", OMNITRADE_REDIS_URL: "redis://redis:6379/0"}
     depends_on: {migrate: {condition: service_completed_successfully}, redis: {condition: service_healthy}}
   report:
     build: {context: ., dockerfile: Dockerfile.backend}

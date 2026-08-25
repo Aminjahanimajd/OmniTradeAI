@@ -12,9 +12,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "development-only-secret-change-before-use"
     artifact_dir: Path = Path("artifacts")
-    fixture_mode: bool = True
-    openai_base_url: str = ""
-    openai_api_key: str = ""
+    fixture_mode: bool = False
 
 
 @lru_cache

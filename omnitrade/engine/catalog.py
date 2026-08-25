@@ -152,7 +152,7 @@ NODE_CATALOG: dict[str, NodeSpec] = {
     ),
     # Output (1)
     "report_renderer": _spec(
-        "output", {"decision": PortType.DECISION}, {"report": PortType.REPORT}, side_effect=True
+        "output", {"decision": PortType.DECISION}, {"report": PortType.REPORT}, model_cost=1, side_effect=True
     ),
 }
 

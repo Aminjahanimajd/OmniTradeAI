@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.vite/
 *.pyc
 .coverage
 htmlcov/
@@ -18,3 +19,4 @@ artifacts/*
 !artifacts/defense/**
 playwright-report/
 test-results/
+graphify-out/

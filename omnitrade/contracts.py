@@ -94,7 +94,7 @@ class Budget(BaseModel):
 class RunConfiguration(BaseModel):
     """User choices that make one analysis run reproducible."""
 
-    data_mode: str = Field(default="recorded", pattern=r"^(recorded|prefer_live|live)$")
+    data_mode: str = Field(default="live", pattern=r"^(recorded|prefer_live|live)$")
     analysts: list[str] = Field(
         default_factory=lambda: ["market", "fundamentals", "news", "sentiment"]
     )
@@ -107,13 +107,41 @@ class RunConfiguration(BaseModel):
     evidence_freshness_hours: int = Field(default=72, ge=1, le=720)
     quick_model: str = Field(default="deterministic-fixture", min_length=2, max_length=100)
     deep_model: str = Field(default="deterministic-fixture", min_length=2, max_length=100)
+    model_provider: str = Field(default="fixture", min_length=2, max_length=40)
+    market_providers: list[str] = Field(default_factory=lambda: ["yfinance"])
+    fundamental_providers: list[str] = Field(default_factory=lambda: ["yfinance"])
+    news_providers: list[str] = Field(default_factory=lambda: ["yfinance"])
+    sentiment_providers: list[str] = Field(default_factory=lambda: ["yfinance"])
+    macro_providers: list[str] = Field(default_factory=lambda: ["fred"])
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    model_max_retries: int = Field(default=2, ge=0, le=5)
+    reasoning_effort: str = Field(default="medium", pattern=r"^(low|medium|high)$")
 
     @model_validator(mode="after")
     def valid_analysts(self) -> RunConfiguration:
         allowed = {"market", "fundamentals", "news", "sentiment"}
         if not self.analysts or not set(self.analysts).issubset(allowed):
             raise ValueError("analysts must contain supported values")
+        category_allowed = (
+            (self.market_providers, {"yfinance", "alpha_vantage"}),
+            (self.fundamental_providers, {"yfinance", "alpha_vantage"}),
+            (self.news_providers, {"yfinance", "alpha_vantage"}),
+            (self.sentiment_providers, {"yfinance", "alpha_vantage", "stocktwits", "reddit"}),
+            (self.macro_providers, {"alpha_vantage", "fred", "polymarket"}),
+        )
+        if any(not chain or not set(chain).issubset(allowed) for chain, allowed in category_allowed):
+            raise ValueError("every data category needs a compatible real provider chain")
         return self
+
+
+class InvestorPolicy(BaseModel):
+    """User investment constraints that change risk validation, not raw evidence."""
+
+    investment_horizon: str = Field(default="medium", pattern=r"^(short|medium|long)$")
+    experience_level: str = Field(default="beginner", pattern=r"^(beginner|intermediate|advanced)$")
+    maximum_loss_percent: float = Field(default=10, ge=1, le=50)
+    maximum_position_percent: float = Field(default=20, ge=1, le=100)
+    excluded_sectors: list[str] = Field(default_factory=list, max_length=20)
 
 
 class UserProfile(BaseModel):
@@ -121,6 +149,7 @@ class UserProfile(BaseModel):
     email: str = Field(default="", max_length=160)
     default_ticker: str = Field(default="AAPL", pattern=r"^[A-Z][A-Z0-9.-]*$")
     default_configuration: RunConfiguration = Field(default_factory=RunConfiguration)
+    investor_policy: InvestorPolicy = Field(default_factory=InvestorPolicy)
 
 
 class WorkflowDefinition(BaseModel):
@@ -189,6 +218,7 @@ class Run(BaseModel):
     trace_id: UUID = Field(default_factory=uuid4)
     degraded_reasons: list[str] = Field(default_factory=list)
     configuration: RunConfiguration = Field(default_factory=RunConfiguration)
+    investor_policy: InvestorPolicy = Field(default_factory=InvestorPolicy)
     budget_override: Budget | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

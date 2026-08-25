@@ -8,6 +8,8 @@ to the report API, GUI and PDF. FR-21 maps backend capability options to closed
 GUI selectors. FR-22 maps backend port compatibility rules to safe editor
 suggestions and connections. FR-23 maps the node description catalog to the
 selected-node help panel in Workflow Lab.
+FR-24-27 map the Connections tab, session connection registry, real provider
+adapters, model gateway, run preconditions, profile policy and report outputs.
 
 | Requirement | Components | Main verification |
 |---|---|---|
@@ -23,3 +25,6 @@ selected-node help panel in Workflow Lab.
 | FR-21 | analysis-options API, New Analysis selectors | API and GUI tests |
 | FR-22 | typed catalog suggestions, Workflow Lab safe connection helper | catalog and GUI tests |
 | FR-23 | node description catalog, Workflow Lab selected-node panel | catalog and GUI tests |
+| FR-24-25 | connection API, session registry, run preconditions, real provider chains | `test_api.py`, `test_providers.py` |
+| FR-26 | provider catalog, model discovery, OpenAI-compatible and native clients | model gateway tests and live verification |
+| FR-27 | profile, agent prompt context, risk and decision executors | runtime and report tests |

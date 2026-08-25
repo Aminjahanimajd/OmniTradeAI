@@ -39,6 +39,7 @@ class WorkerCrash(RuntimeError):
 @dataclass
 class ExecutionContext:
     run: Run
+    connections: dict[str, dict[str, str]] = field(default_factory=dict, repr=False)
     provider_calls: int = 0
     model_calls: int = 0
     tokens: int = 0
@@ -68,10 +69,12 @@ class WorkflowRuntime:
         executors: dict[str, NodeExecutor],
         listener: EventListener | None = None,
         cancellation_probe: CancellationProbe | None = None,
+        connections: dict[str, dict[str, str]] | None = None,
     ):
         self.executors = executors
         self.listener = listener
         self.cancellation_probe = cancellation_probe
+        self.connections = connections or {}
         self._events: list[RunEvent] = []
         self._checkpoints: list[Checkpoint] = []
         self._checkpoint_sequence = 0
@@ -94,7 +97,7 @@ class WorkflowRuntime:
             if restored
             else {node.id: NodeRun(run_id=run.id, node_id=node.id) for node in workflow.nodes}
         )
-        context = ExecutionContext(run=run)
+        context = ExecutionContext(run=run, connections=self.connections)
         run.status = RunStatus.RUNNING
         await self._emit(run, "run.started")
 

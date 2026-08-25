@@ -1,8 +1,53 @@
 import type{AnalysisOptions,Budget,CatalogSuggestion,ReportData,ReportSummary,Run,RunActivity,RunConfiguration,UserProfile,ValidationResult,WorkflowRecord}from'./types';
-const API='/api/v1';let token=localStorage.getItem('omnitrade-token')??'';
-async function request<T>(path:string,options:RequestInit={}):Promise<T>{const response=await fetch(`${API}${path}`,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{}) ,...options.headers}});if(!response.ok)throw new Error((await response.text())||`Request failed: ${response.status}`);return response.status===204?undefined as T:response.json()}
-export async function login(username:string,password:string){const data=await request<{access_token:string}>('/auth/login',{method:'POST',body:JSON.stringify({username,password})});token=data.access_token;localStorage.setItem('omnitrade-token',token);return data}
-export const hasToken=()=>Boolean(token);export const logout=()=>{token='';localStorage.removeItem('omnitrade-token')};
+
+const API='/api/v1';
+const TOKEN_KEY='omnitrade-token';
+export const AUTH_EXPIRED_EVENT='omnitrade-auth-expired';
+let token=localStorage.getItem(TOKEN_KEY)??'';
+
+function tokenHasExpired(value:string):boolean{
+  try{
+    const encoded=value.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    const payload=JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length/4)*4,'=')))as{exp?:number};
+    return typeof payload.exp!=='number'||payload.exp*1000<=Date.now();
+  }catch{return true}
+}
+
+function clearSession(notify:boolean):void{
+  token='';
+  localStorage.removeItem(TOKEN_KEY);
+  if(notify)window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+}
+
+async function errorMessage(response:Response):Promise<string>{
+  const text=await response.text();
+  try{return JSON.parse(text).detail??text??`Request failed: ${response.status}`}catch{return text||`Request failed: ${response.status}`}
+}
+
+async function request<T>(path:string,options:RequestInit={}):Promise<T>{
+  const authenticated=Boolean(token)&&path!=='/auth/login';
+  const response=await fetch(`${API}${path}`,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{}) ,...options.headers}});
+  if(response.status===401&&authenticated)clearSession(true);
+  if(!response.ok)throw new Error(await errorMessage(response));
+  return response.status===204?undefined as T:response.json();
+}
+
+export async function login(username:string,password:string){
+  const data=await request<{access_token:string}>('/auth/login',{method:'POST',body:JSON.stringify({username,password})});
+  token=data.access_token;
+  localStorage.setItem(TOKEN_KEY,token);
+  return data;
+}
+
+export function hasToken():boolean{
+  if(!token||tokenHasExpired(token)){
+    if(token)clearSession(false);
+    return false;
+  }
+  return true;
+}
+
+export const logout=()=>clearSession(false);
 export const listWorkflows=()=>request<WorkflowRecord[]>('/workflows');
 export const createSample=()=>request<WorkflowRecord>('/workflows/sample',{method:'POST'});
 export const validateWorkflow=(id:string)=>request<ValidationResult>(`/workflows/${id}/validate`,{method:'POST'});
@@ -17,8 +62,19 @@ export const getLineage=(id:string)=>request<Record<string,unknown>>(`/runs/${id
 export const getActivity=(id:string)=>request<RunActivity>(`/runs/${id}/activity`);
 export const listReports=()=>request<ReportSummary[]>('/report-history');
 export const getReport=(id:string)=>request<ReportData>(`/reports/${id}`);
-export async function downloadReport(id:string,format:string){const response=await fetch(`${API}/reports/${id}/export/${format}`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error(await response.text());const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`omnitrade-${id}.${format}`;link.click();URL.revokeObjectURL(url)}
+export async function downloadReport(id:string,format:string){
+  const response=await fetch(`${API}/reports/${id}/export/${format}`,{headers:{Authorization:`Bearer ${token}`}});
+  if(response.status===401)clearSession(true);
+  if(!response.ok)throw new Error(await errorMessage(response));
+  const blob=await response.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`omnitrade-${id}.${format}`;link.click();URL.revokeObjectURL(url);
+}
 export const getProfile=()=>request<UserProfile>('/profile');
 export const saveProfile=(profile:UserProfile)=>request<UserProfile>('/profile',{method:'PUT',body:JSON.stringify(profile)});
 export const getAnalysisOptions=()=>request<AnalysisOptions>('/analysis-options');
 export const getCatalog=()=>request<{count:number;nodes:Record<string,{group:string;description:string;inputs:Record<string,string>;outputs:Record<string,string>;suggested_targets:CatalogSuggestion[]}>}>('/catalog');
+export const getConnectionCatalog=()=>request<{providers:Record<string,import('./types').ConnectionSpec>}>('/connections/catalog');
+export const listConnections=()=>request<import('./types').ConnectionStatus[]>('/connections');
+export const saveConnection=(provider:string,value:import('./types').ConnectionInput)=>request<import('./types').ConnectionStatus>(`/connections/${provider}`,{method:'PUT',body:JSON.stringify(value)});
+export const verifyConnection=(provider:string)=>request<import('./types').ConnectionStatus>(`/connections/${provider}/verify`,{method:'POST'});
+export const loadConnectionModels=(provider:string)=>request<{provider:string;models:string[]}>(`/connections/${provider}/models`);
+export const deleteConnection=(provider:string)=>request<void>(`/connections/${provider}`,{method:'DELETE'});

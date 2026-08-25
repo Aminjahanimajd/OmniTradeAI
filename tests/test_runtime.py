@@ -29,6 +29,36 @@ def test_runtime_completes_and_is_deterministic():
     asyncio.run(scenario())
 
 
+def test_different_tickers_produce_different_analysis_values():
+    async def scenario():
+        first = await WorkflowRuntime(deterministic_executors()).execute(
+            defense_workflow(), make_run()
+        )
+        second_run = make_run()
+        second_run.ticker = "MSFT"
+        second = await WorkflowRuntime(deterministic_executors()).execute(
+            defense_workflow(), second_run
+        )
+        first_market = first.node_runs["market_analyst"].output
+        second_market = second.node_runs["market_analyst"].output
+        assert first_market["signal_score"] != second_market["signal_score"]
+        assert first_market["key_points"] != second_market["key_points"]
+
+    asyncio.run(scenario())
+
+
+def test_investor_loss_limit_changes_risk_policy() -> None:
+    async def scenario():
+        normal_run = make_run()
+        strict_run = make_run()
+        strict_run.investor_policy.maximum_loss_percent = 5
+        normal = await WorkflowRuntime(deterministic_executors()).execute(defense_workflow(), normal_run)
+        strict = await WorkflowRuntime(deterministic_executors()).execute(defense_workflow(), strict_run)
+        assert normal.node_runs["balanced"].output["summary"] != strict.node_runs["balanced"].output["summary"]
+
+    asyncio.run(scenario())
+
+
 def test_optional_failure_degrades_run():
     async def scenario():
         graph = defense_workflow()
@@ -52,13 +82,13 @@ def test_required_failure_stops_run():
     asyncio.run(scenario())
 
 
-def test_timeout_uses_fallback():
+def test_timeout_does_not_use_an_unselected_fake_fallback():
     async def scenario():
         graph = defense_workflow()
         next(n for n in graph.nodes if n.id == "market").config["simulate"] = "timeout"
         result = await WorkflowRuntime(deterministic_executors()).execute(graph, make_run())
-        assert result.run.status == RunStatus.SUCCEEDED
-        assert any(e.event_type == "provider.fallback" for e in result.events)
+        assert result.run.status == RunStatus.FAILED
+        assert not any(e.event_type == "provider.fallback" for e in result.events)
 
     asyncio.run(scenario())
 

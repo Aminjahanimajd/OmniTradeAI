@@ -14,7 +14,7 @@ def defense_workflow() -> WorkflowDefinition:
         n("start", "start"),
         n("split", "parallel_split"),
         n("instrument", "resolve_instrument"),
-        n("market", "fetch_market", retry={"max_attempts": 2, "fallback_provider": "fixture"}),
+        n("market", "fetch_market", retry={"max_attempts": 2}),
         n("fundamentals", "fetch_fundamentals"),
         n("news", "fetch_news"),
         n("macro", "fetch_macro", optional=True),

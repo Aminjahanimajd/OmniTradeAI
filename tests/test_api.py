@@ -31,6 +31,7 @@ def test_complete_browser_api_scenario() -> None:
                 "workflow_version_id": version["id"],
                 "ticker": "AAPL",
                 "as_of": "2026-01-01T10:00:00Z",
+                "configuration": {"data_mode": "recorded"},
             },
         )
         assert run_response.status_code == 202
@@ -59,6 +60,23 @@ def test_catalog_suggestions_and_input_options_are_backend_contracts() -> None:
         suggestions = catalog["fetch_market"]["suggested_targets"]
         assert any(item["node_type"] == "normalize_market" for item in suggestions)
         assert all(item["source_port"] and item["target_port"] for item in suggestions)
+
+
+def test_connection_credentials_are_write_only() -> None:
+    with TestClient(app) as client:
+        headers = auth(client)
+        catalog = client.get("/api/v1/connections/catalog", headers=headers)
+        assert catalog.status_code == 200
+        assert "openai" in catalog.json()["providers"]
+        saved = client.put(
+            "/api/v1/connections/openai",
+            headers=headers,
+            json={"provider": "openai", "api_key": "secret-value", "test_model": "gpt-5.4-mini"},
+        )
+        assert saved.status_code == 200
+        assert "secret-value" not in saved.text
+        listed = client.get("/api/v1/connections", headers=headers)
+        assert "secret-value" not in listed.text
 
 
 def test_sample_workflow_creation_is_idempotent() -> None:
@@ -110,10 +128,11 @@ def test_run_settings_are_validated_before_queueing() -> None:
             "/api/v1/runs",
             headers=headers,
             json={
-                "workflow_version_id": version["id"],
-                "ticker": "AAPL",
-                "as_of": "2026-01-01T10:00:00Z",
-                "budget_override": {
+                    "workflow_version_id": version["id"],
+                    "ticker": "AAPL",
+                    "as_of": "2026-01-01T10:00:00Z",
+                    "configuration": {"data_mode": "recorded"},
+                    "budget_override": {
                     "max_runtime_seconds": 180,
                     "max_model_calls": 1,
                     "max_provider_calls": 30,
@@ -144,7 +163,7 @@ def test_selected_analysts_change_the_executed_workflow() -> None:
                 "workflow_version_id": version["id"],
                 "ticker": "AAPL",
                 "as_of": "2026-01-01T10:00:00Z",
-                "configuration": {"analysts": ["market"]},
+                    "configuration": {"data_mode": "recorded", "analysts": ["market"]},
             },
         )
         assert response.status_code == 202

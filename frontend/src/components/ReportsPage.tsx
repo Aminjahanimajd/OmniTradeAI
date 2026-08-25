@@ -163,7 +163,7 @@ function normalizeReport(raw: ReportData): ReportData {
     title: raw.title ?? 'OmniTrade report', ticker: raw.ticker ?? 'Stock', as_of: raw.as_of ?? new Date().toISOString(), generated_at: raw.generated_at ?? new Date().toISOString(), executive_summary: raw.executive_summary ?? 'This report uses an older saved format.',
     decision: { action: decision.action ?? 'NO_DECISION', confidence: decision.confidence ?? 0, rationale: decision.rationale ?? 'No structured rationale is available.', key_factors: decision.key_factors ?? [], warnings: decision.warnings ?? [] },
     sections: raw.sections ?? [], agent_analyses: [], risk_analyses: [], evidence_overview: [],
-    analysis_settings: raw.analysis_settings ?? { data_mode: 'recorded', analysts: ['market', 'fundamentals', 'news', 'sentiment'], research_depth: 2, risk_profile: 'balanced', report_detail: 'standard', output_language: 'English', base_currency: 'USD', allow_degraded: true, evidence_freshness_hours: 72, quick_model: 'legacy', deep_model: 'legacy' },
+    analysis_settings: raw.analysis_settings ?? { data_mode: 'live', analysts: ['market', 'fundamentals', 'news', 'sentiment'], research_depth: 2, risk_profile: 'balanced', report_detail: 'standard', output_language: 'English', base_currency: 'USD', allow_degraded: true, evidence_freshness_hours: 72, quick_model: 'legacy', deep_model: 'legacy' },
     lineage_complete: Boolean(raw.lineage_complete), disclaimer: raw.disclaimer ?? 'Financial decision support only. OmniTrade does not execute trades.',
   };
 }

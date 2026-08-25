@@ -17,7 +17,7 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-04 | Only a valid immutable workflow version can be published. | Version tests |
 | FR-05 | The engine schedules ready nodes in parallel and merges deterministically. | Scheduler tests and event trace |
 | FR-06 | Required and optional failures create failed or degraded outcomes. | Failure-policy tests |
-| FR-07 | Provider calls use bounded timeout, retry and fallback policies. | Adapter tests |
+| FR-07 | Provider calls use bounded timeout, retry and only user-selected real-provider chains. | Adapter tests |
 | FR-08 | Evidence is normalized and checked for ticker, time, freshness, unit, currency and provenance. | Evidence tests |
 | FR-09 | Four specialists produce schema-validated reports through a model gateway. | Contract tests |
 | FR-10 | Bull and bear research can repeat only within a declared iteration bound. | Loop tests |
@@ -34,13 +34,17 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-21 | Ticker, model, language, currency and data-mode selectors show only values supported by the backend. | Options API and browser test |
 | FR-22 | Workflow Lab suggests port-compatible next nodes and blocks an incompatible edge before it becomes part of the draft. | Catalog-contract and editor tests |
 | FR-23 | Selecting a workflow node shows a short plain-language explanation of its role. | Catalog description and Workflow Lab tests |
+| FR-24 | A user can configure and verify session-only data and model credentials without exposing secrets in durable state or API responses. | Connection API and secret-redaction tests |
+| FR-25 | Docker analysis runs reject recorded evidence and unverified providers instead of silently using prepared data. | Run precondition and provider-chain tests |
+| FR-26 | Model choices cover the providers and model modes offered by the TradingAgents reference, including local, cloud, Bedrock and custom compatible endpoints. | Connection catalog and model-discovery tests |
+| FR-27 | Investment horizon, experience, loss limit, position limit and excluded sectors change prompts, risk thresholds, decision validation or report guidance. | Policy executor tests and report inspection |
 
 ## Quality requirements
 
 | ID | Quality | Measurable target |
 |---|---|---|
 | QR-01 | Reliability | Idempotent event handling and checkpoint recovery |
-| QR-02 | Security | JWT auth, ownership checks, no secrets in events or logs |
+| QR-02 | Security | JWT auth, ownership checks, write-only session credentials, no secrets in durable data, events, reports or logs |
 | QR-03 | Performance | 95% API reads under 500 ms locally; bounded concurrency |
 | QR-04 | Testability | Deterministic fake model and fixtures; workflow core >=80% coverage |
 | QR-05 | Explainability | 100% decision claims have lineage or are marked unsupported |

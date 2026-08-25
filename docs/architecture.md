@@ -11,21 +11,25 @@ store keeps exports with hashes. There is no broker interface.
 flowchart LR
   U["Analyst"] --> GUI["React workflow IDE"]
   GUI --> API["API service"]
+  GUI --> CON["Session connection setup"]
+  CON --> API
   API --> PG[("PostgreSQL schemas")]
   API --> RS[("Redis Streams")]
-  RS --> WF["Workflow service"]
-  WF --> RS
-  RS --> EV["Evidence service"]
-  RS --> MG["Model gateway"]
-  RS --> RP["Report service"]
-  EV --> DP["Market/news/macro/social providers"]
-  MG --> LM["Fake or OpenAI-compatible model"]
+  API -->|internal run command| WF["Workflow service"]
+  WF -->|versioned events| RS
+  WF -->|typed node task| EV["Evidence service"]
+  WF -->|typed node task| MG["Model gateway"]
+  WF -->|typed node task| RP["Report service"]
+  EV --> DP["Yahoo / Alpha Vantage / FRED / Polymarket / social feeds"]
+  MG --> LM["Verified cloud, Bedrock, local or compatible model"]
   RP --> FS["Hashed artifacts"]
-  EV --> RS
-  MG --> RS
-  RP --> RS
   API -. "SSE events" .-> GUI
 ```
+
+The API keeps verified credentials in process memory and sends only the needed
+connection to each internal task. Credentials are not stored in PostgreSQL,
+Redis events, reports or artifacts. Docker runs accept real providers only.
+Recorded providers and deterministic models are isolated test seams used by CI.
 
 ## Main run state
 
@@ -61,4 +65,3 @@ runs, node runs, checkpoints and events. Evidence owns normalized evidence and
 provider call records. Model owns calls and budget usage. Report owns decisions,
 claims, reports and artifact metadata. Cross-service access uses IDs and APIs,
 not direct table coupling.
-

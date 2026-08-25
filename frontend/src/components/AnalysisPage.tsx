@@ -8,18 +8,21 @@ import { createRun, getAnalysisOptions, getProfile, listWorkflows } from '../api
 import type { AnalysisOptions, Budget, RunConfiguration, WorkflowRecord } from '../types';
 
 const defaultConfig: RunConfiguration = {
-  data_mode: 'recorded', analysts: ['market', 'fundamentals', 'news', 'sentiment'],
+  data_mode: 'live', analysts: ['market', 'fundamentals', 'news', 'sentiment'],
   research_depth: 2, risk_profile: 'balanced', report_detail: 'standard',
   output_language: 'English', base_currency: 'USD', allow_degraded: true,
   evidence_freshness_hours: 72, quick_model: 'deterministic-fixture',
   deep_model: 'deterministic-fixture',
+  model_provider: 'fixture', market_providers: ['yfinance'], fundamental_providers: ['yfinance'],
+  news_providers: ['yfinance'], sentiment_providers: ['yfinance'], macro_providers: ['fred'], temperature: null,
+  model_max_retries: 2, reasoning_effort: 'medium',
 };
 const defaultBudget: Budget = {
   max_runtime_seconds: 180, max_model_calls: 30, max_provider_calls: 30,
   max_tokens: 40000, max_parallel_nodes: 8,
 };
 const emptyOptions: AnalysisOptions = {
-  tickers: [], quick_models: [], deep_models: [], languages: [], currencies: [], data_modes: [],
+  tickers: [], quick_models: [], deep_models: [], languages: [], currencies: [], data_modes: [], model_providers: [], provider_models: {}, data_providers: [], data_provider_capabilities: {},
 };
 
 export function latestPublishedWorkflows(items: WorkflowRecord[]): WorkflowRecord[] {
@@ -52,11 +55,19 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         setVersion(published[0]?.published_version_id ?? '');
         setOptions(available);
         setTicker(available.tickers.includes(profile.default_ticker) ? profile.default_ticker : available.tickers[0] ?? 'AAPL');
+        const modelProvider = available.model_providers.includes(profile.default_configuration.model_provider) ? profile.default_configuration.model_provider : available.model_providers[0] ?? 'fixture';
+        const models = available.provider_models[modelProvider] ?? available.quick_models;
         setConfig({
           ...profile.default_configuration,
-          data_mode: available.data_modes.includes(profile.default_configuration.data_mode) ? profile.default_configuration.data_mode : available.data_modes[0] ?? 'recorded',
-          quick_model: available.quick_models.includes(profile.default_configuration.quick_model) ? profile.default_configuration.quick_model : available.quick_models[0] ?? 'deterministic-fixture',
-          deep_model: available.deep_models.includes(profile.default_configuration.deep_model) ? profile.default_configuration.deep_model : available.deep_models[0] ?? 'deterministic-fixture',
+          data_mode: available.data_modes.includes(profile.default_configuration.data_mode) ? profile.default_configuration.data_mode : available.data_modes[0] ?? 'live',
+          model_provider: modelProvider,
+          quick_model: models.includes(profile.default_configuration.quick_model) ? profile.default_configuration.quick_model : models[0] ?? '',
+          deep_model: models.includes(profile.default_configuration.deep_model) ? profile.default_configuration.deep_model : models[0] ?? '',
+          market_providers: profile.default_configuration.market_providers.filter(name=>available.data_providers.includes(name)),
+          fundamental_providers: profile.default_configuration.fundamental_providers.filter(name=>available.data_providers.includes(name)),
+          news_providers: profile.default_configuration.news_providers.filter(name=>available.data_providers.includes(name)),
+          sentiment_providers: profile.default_configuration.sentiment_providers.filter(name=>available.data_providers.includes(name)),
+          macro_providers: profile.default_configuration.macro_providers.filter(name=>available.data_providers.includes(name)),
         });
       })
       .catch(error => setMessage(String(error)));
@@ -89,10 +100,11 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
   return <Stack spacing={2}>
     <Box>
       <Typography variant="h4" fontWeight={800}>New Analysis</Typography>
-      <Typography color="text.secondary">Every option below is supported by the current backend. Free model and ticker input is not accepted.</Typography>
+      <Typography color="text.secondary">The selected real providers, models, agents, risk rules, and report options control this workflow run.</Typography>
     </Box>
     {message && <Alert severity="error">{message}</Alert>}
     {!workflows.length && <Alert severity="warning">Publish a valid workflow before starting an analysis.</Alert>}
+    {(!options.model_providers.length||!options.data_providers.length)&&<Alert severity="warning">Open Connections and verify at least one AI model provider and the real data providers needed by this workflow.</Alert>}
     <Grid container spacing={2}>
       <Grid item xs={12} md={6}>
         <Card><CardContent>
@@ -108,8 +120,9 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
             />
             <TextField label="Analysis date" type="date" value={date} inputProps={{ max: new Date().toISOString().slice(0, 10) }} onChange={event => setDate(event.target.value)} InputLabelProps={{ shrink: true }} />
             <TextField select label="Data mode" value={config.data_mode} onChange={event => update('data_mode', event.target.value)}>
-              {options.data_modes.map(mode => <MenuItem value={mode} key={mode}>{mode === 'recorded' ? 'Recorded data - reproducible' : mode.replaceAll('_', ' ')}</MenuItem>)}
+              {options.data_modes.map(mode => <MenuItem value={mode} key={mode}>{mode === 'recorded' ? 'Recorded data - tests only' : 'Real provider data'}</MenuItem>)}
             </TextField>
+            {([['market_providers','Market data chain','market'],['fundamental_providers','Fundamental data chain','fundamentals'],['news_providers','News data chain','news'],['sentiment_providers','Social sentiment chain','sentiment'],['macro_providers','Macro data chain','macro']] as [keyof RunConfiguration,string,string][]).map(([key,label,capability])=><TextField key={key} select SelectProps={{multiple:true}} label={label} value={config[key] as string[]} onChange={event=>update(key,event.target.value as RunConfiguration[typeof key])}>{options.data_providers.filter(name=>options.data_provider_capabilities[name]?.includes(capability)).map(name=><MenuItem key={name} value={name}>{name.replaceAll('_',' ')}</MenuItem>)}</TextField>)}
           </Stack>
         </CardContent></Card>
       </Grid>
@@ -132,12 +145,18 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         <Card><CardContent>
           <Typography variant="h6" fontWeight={800} gutterBottom>3. Models and report</Typography>
           <Stack spacing={2}>
+            <TextField select label="Model provider" value={config.model_provider} onChange={event => {const name=event.target.value;const models=options.provider_models[name]??[];setConfig(current=>({...current,model_provider:name,quick_model:models[0]??'',deep_model:models[0]??''}))}}>
+              {options.model_providers.map(name => <MenuItem value={name} key={name}>{name.replaceAll('_',' ')}</MenuItem>)}
+            </TextField>
             <TextField select label="Quick analysis model" value={config.quick_model} onChange={event => update('quick_model', event.target.value)}>
-              {options.quick_models.map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
+              {(options.provider_models[config.model_provider]??[]).map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
             </TextField>
             <TextField select label="Deep reasoning model" value={config.deep_model} onChange={event => update('deep_model', event.target.value)}>
-              {options.deep_models.map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
+              {(options.provider_models[config.model_provider]??[]).map(model => <MenuItem value={model} key={model}>{model}</MenuItem>)}
             </TextField>
+            <TextField select label="Reasoning effort" value={config.reasoning_effort} onChange={event=>update('reasoning_effort',event.target.value)}><MenuItem value="low">Low</MenuItem><MenuItem value="medium">Medium</MenuItem><MenuItem value="high">High</MenuItem></TextField>
+            <TextField type="number" label="Temperature (empty uses provider default)" value={config.temperature??''} inputProps={{min:0,max:2,step:0.1}} onChange={event=>update('temperature',event.target.value===''?null:Number(event.target.value))}/>
+            <TextField type="number" label="Model retries" value={config.model_max_retries} inputProps={{min:0,max:5}} onChange={event=>update('model_max_retries',Number(event.target.value))}/>
             <TextField select label="Report detail" value={config.report_detail} onChange={event => update('report_detail', event.target.value)}>
               <MenuItem value="summary">Summary</MenuItem><MenuItem value="standard">Standard</MenuItem><MenuItem value="detailed">Detailed</MenuItem>
             </TextField>
@@ -161,6 +180,6 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         </CardContent></Card>
       </Grid>
     </Grid>
-    <Button size="large" variant="contained" startIcon={<PlayArrowIcon />} disabled={busy || !version || !ticker || !config.analysts.length} onClick={start}>Start customized analysis</Button>
+    <Button size="large" variant="contained" startIcon={<PlayArrowIcon />} disabled={busy || !version || !ticker || !config.analysts.length || !config.model_provider || !config.quick_model || !config.deep_model || !config.market_providers.length || !config.fundamental_providers.length || !config.news_providers.length || !config.sentiment_providers.length || !config.macro_providers.length} onClick={start}>Start customized real analysis</Button>
   </Stack>;
 }

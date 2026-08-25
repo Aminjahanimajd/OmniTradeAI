@@ -59,11 +59,12 @@ only as study references; their workflow code was not copied or renamed.
 
 | Area | What the user can do |
 |---|---|
+| Connections | Add private provider credentials, discover models, and verify each real connection before use. |
 | New Analysis | Select a stock, analysts, research depth, risk profile, models, data mode, report detail, language, currency, freshness, and budgets. |
 | Agent Room | Follow real workflow events and read the output and impact of each agent. |
 | Reports | Browse saved reports by calendar, compare agent views, inspect evidence, and export PDF or JSON. |
 | Workflow Lab | Build, undo, validate, publish, and run typed workflow graphs with smart connection suggestions. |
-| Profiles | Save default analysis settings for later runs. |
+| Profiles | Set horizon, experience, loss limit, position limit, and excluded sectors that directly change analysis and decision rules. |
 | Recovery | Cancel work or resume from checkpoints without repeating completed nodes. |
 
 ## System workflow
@@ -141,7 +142,7 @@ recovery clear. They are still managed together with one Compose command.
 ### Run the full system
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Aminjahanimajd/OmniTradeAI.git
 cd OmniTradeAI
 cp .env.example .env
 docker compose up --build -d
@@ -175,19 +176,33 @@ Copy `.env.example` to `.env`. Never commit the real `.env` file.
 | `OMNITRADE_REDIS_URL` | Redis connection string |
 | `OMNITRADE_JWT_SECRET` | Local authentication signing secret |
 | `OMNITRADE_ARTIFACT_DIR` | Report and artifact location |
-| `OMNITRADE_FIXTURE_MODE` | Uses deterministic recorded data when `true` |
-| `OMNITRADE_OPENAI_BASE_URL` | Optional OpenAI-compatible gateway URL |
-| `OMNITRADE_OPENAI_API_KEY` | Optional model gateway key |
+| `OMNITRADE_FIXTURE_MODE` | Enables deterministic evidence only for tests |
 
 Replace all example credentials and secrets before any shared deployment.
 
 ## Using the application
 
-1. Open **New Analysis** and choose the stock and analysis policy.
-2. Start the run and follow each node in **Agent Room**.
-3. Open **Reports** to read every analyst, debate, risk, and manager view.
-4. Use **Workflow Lab** for advanced graph editing.
-5. Save the graph, validate it, and publish it before using the new version.
+1. Open **Connections**, save the needed provider settings, and verify each connection.
+2. Open **New Analysis** and choose the stock, provider chains, models, agents, and analysis policy.
+3. Start the run and follow each node in **Agent Room**.
+4. Open **Reports** to read every analyst, debate, risk, and manager view.
+5. Use **Workflow Lab** for advanced graph editing, then save, validate, and publish it.
+
+The normal Docker application accepts real providers only. Credentials are held
+in API memory for the current server session. They are never written to the
+database, run state, event stream, report, or exported artifact. Real provider
+fallback is explicit: the user selects an ordered chain, and OmniTrade never
+inserts recorded evidence when that chain fails.
+
+Model connections cover OpenAI, Gemini, Anthropic, xAI, DeepSeek, Qwen, GLM,
+MiniMax, OpenRouter, Mistral, Kimi, Groq, NVIDIA NIM, Azure OpenAI, Amazon
+Bedrock, Ollama, and other OpenAI-compatible servers. Data connections cover
+Yahoo Finance, Alpha Vantage, FRED, Polymarket, StockTwits, and Reddit public feeds.
+
+Investor profile values are active workflow inputs. The investment horizon
+changes analysis thresholds, the maximum acceptable loss changes risk checks,
+the position limit changes decision guidance, excluded sectors can block a
+`BUY` result, and experience level changes the detail of model explanations.
 
 Workflow Lab uses the same typed-port rules as the backend validator. Selecting
 a node shows its role and safe next-node suggestions. An invalid edge is blocked
@@ -201,6 +216,9 @@ The API is available at `http://localhost:8000`. Important routes include:
 POST   /api/v1/auth/login
 GET    /api/v1/catalog
 GET    /api/v1/analysis-options
+GET    /api/v1/connections/catalog
+PUT    /api/v1/connections/{provider}
+POST   /api/v1/connections/{provider}/verify
 GET    /api/v1/workflows
 POST   /api/v1/workflows/{id}/validate
 POST   /api/v1/workflows/{id}/publish
@@ -243,6 +261,10 @@ pnpm exec playwright test
 CI uses deterministic models and recorded evidence. Live provider tests must be
 run separately. The workflow core has an 80% minimum coverage gate.
 
+Latest local verification: 34 backend tests and 4 frontend tests passed. The
+workflow engine reached 89% test coverage, the production frontend built
+successfully, and Yahoo Finance passed a real connection check.
+
 ## Project structure
 
 ```text
@@ -274,9 +296,9 @@ OmniTradeAI/
 
 ## Current limitations
 
-- The verified default mode uses deterministic recorded evidence.
-- The current model selector exposes only the implemented deterministic fixture.
-- Live providers and OpenAI-compatible models require configured adapters and keys.
+- Real providers need network access and, where required, valid user credentials.
+- Provider coverage, limits, costs, and model names can change outside this project.
+- Recorded evidence and the deterministic model remain isolated test seams for CI; the Docker GUI does not offer them for analysis runs.
 - The system supports stocks only.
 - It does not manage portfolios or connect to a broker.
 - A recommendation is not a guarantee of correctness or future performance.

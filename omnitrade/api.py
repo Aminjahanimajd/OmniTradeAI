@@ -13,6 +13,14 @@ from fastapi.responses import StreamingResponse
 
 from omnitrade.auth import LoginRequest, User, authenticate, current_user, issue_token
 from omnitrade.config import get_settings
+from omnitrade.connections import (
+    MODEL_PROVIDERS,
+    PROVIDER_CATALOG,
+    ConnectionInput,
+    connections,
+    discover_models,
+    verify_connection,
+)
 from omnitrade.contracts import (
     Checkpoint,
     FailurePolicy,
@@ -96,20 +104,85 @@ def catalog(_: User = Depends(current_user)) -> dict[str, object]:
     }
 
 
+@app.get("/api/v1/connections/catalog")
+def connection_catalog(_: User = Depends(current_user)) -> dict[str, object]:
+    return {
+        "providers": {
+            name: {
+                "label": spec["label"], "category": spec["category"],
+                "base_url": spec.get("base_url"), "key_optional": spec.get("key_optional", False),
+                "models": spec.get("models", []), "capabilities": spec.get("capabilities", []),
+            }
+            for name, spec in PROVIDER_CATALOG.items()
+        }
+    }
+
+
+@app.get("/api/v1/connections")
+def list_connections(user: User = Depends(current_user)) -> list[dict[str, object]]:
+    return [item.model_dump(mode="json") for item in connections.statuses(user.id)]
+
+
+@app.put("/api/v1/connections/{provider}")
+def save_connection(provider: str, value: ConnectionInput, user: User = Depends(current_user)) -> dict[str, object]:
+    if provider not in PROVIDER_CATALOG or value.provider != provider:
+        raise HTTPException(status_code=400, detail="Unknown or mismatched provider")
+    return connections.put(user.id, value).model_dump(mode="json")
+
+
+@app.post("/api/v1/connections/{provider}/verify")
+async def verify_saved_connection(provider: str, user: User = Depends(current_user)) -> dict[str, object]:
+    value = connections.get(user.id, provider)
+    if not value:
+        raise HTTPException(status_code=404, detail="Save this connection before verification")
+    try:
+        message = await verify_connection(value)
+    except Exception as exc:
+        connections.mark_verified(user.id, provider, False, str(exc))
+        raise HTTPException(status_code=422, detail=f"Connection failed: {exc}") from exc
+    connections.mark_verified(user.id, provider, True, message)
+    return connections.status(user.id, provider).model_dump(mode="json")
+
+
+@app.get("/api/v1/connections/{provider}/models")
+async def connection_models(provider: str, user: User = Depends(current_user)) -> dict[str, object]:
+    value = connections.get(user.id, provider)
+    if not value:
+        raise HTTPException(status_code=404, detail="Save this connection before loading models")
+    try:
+        models = await discover_models(value)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not load models: {exc}") from exc
+    connections.save_models(user.id, provider, models)
+    return {"provider": provider, "models": models}
+
+
+@app.delete("/api/v1/connections/{provider}", status_code=204)
+def delete_connection(provider: str, user: User = Depends(current_user)) -> Response:
+    connections.delete(user.id, provider)
+    return Response(status_code=204)
+
+
 @app.get("/api/v1/analysis-options")
-def analysis_options(_: User = Depends(current_user)) -> dict[str, object]:
+def analysis_options(user: User = Depends(current_user)) -> dict[str, object]:
     settings = get_settings()
+    verified = connections.runtime_connections(user.id)
+    verified_models = {
+        name: (connections.models(user.id, name) or ([value["test_model"]] if value.get("test_model") else []))
+        for name, value in verified.items() if name in MODEL_PROVIDERS
+    }
+    quick_models = sorted({model for models in verified_models.values() for model in models})
     return {
         "tickers": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AMD"],
-        "quick_models": ["deterministic-fixture"],
-        "deep_models": ["deterministic-fixture"],
-        "languages": ["English", "Italian", "French", "German", "Spanish"],
+        "quick_models": quick_models or (["deterministic-fixture"] if settings.fixture_mode else []),
+        "deep_models": quick_models or (["deterministic-fixture"] if settings.fixture_mode else []),
+        "model_providers": sorted(name for name in verified if name in MODEL_PROVIDERS),
+        "provider_models": verified_models,
+        "data_providers": sorted(name for name in verified if PROVIDER_CATALOG[name]["category"] == "data"),
+        "data_provider_capabilities": {name: PROVIDER_CATALOG[name].get("capabilities", []) for name in verified if PROVIDER_CATALOG[name]["category"] == "data"},
+        "languages": ["English", "Italian", "Chinese", "Japanese", "Korean", "Hindi", "Spanish", "Portuguese", "French", "German", "Arabic", "Russian"],
         "currencies": ["USD", "EUR", "GBP", "JPY"],
-        "data_modes": (
-            ["recorded", "prefer_live", "live"]
-            if not settings.fixture_mode
-            else ["recorded"]
-        ),
+        "data_modes": ["recorded", "live"] if settings.fixture_mode else ["live"],
     }
 
 
@@ -205,17 +278,27 @@ def create_run(
         ticker=request.ticker,
         as_of=request.as_of,
         configuration=request.configuration,
+        investor_policy=store.get_profile(user.id).investor_policy.model_copy(deep=True),
         budget_override=request.budget_override,
     )
-    if request.configuration.data_mode == "live" and get_settings().fixture_mode:
+    runtime_connections = connections.runtime_connections(user.id)
+    if not get_settings().fixture_mode and request.configuration.data_mode == "recorded":
         raise HTTPException(
             status_code=422,
-            detail="Live-only mode is unavailable until live provider credentials are configured",
+            detail="Recorded evidence is for automated tests only. Configure verified real providers.",
         )
-    if request.configuration.data_mode == "prefer_live" and get_settings().fixture_mode:
-        run.degraded_reasons.append(
-            "Live providers are not configured; recorded evidence was used"
-        )
+    if request.configuration.data_mode != "recorded":
+        selected_data = set(request.configuration.market_providers + request.configuration.fundamental_providers + request.configuration.news_providers + request.configuration.sentiment_providers + request.configuration.macro_providers)
+        missing = sorted(selected_data - runtime_connections.keys())
+        if missing:
+            raise HTTPException(status_code=422, detail=f"Verify the selected data connections first: {', '.join(missing)}")
+        if request.configuration.model_provider not in runtime_connections:
+            raise HTTPException(status_code=422, detail="Verify the selected model connection first")
+        selected_connection = runtime_connections[request.configuration.model_provider]
+        fallback_model = selected_connection.get("test_model")
+        allowed_models = connections.models(user.id, request.configuration.model_provider) or ([fallback_model] if fallback_model else [])
+        if request.configuration.quick_model not in allowed_models or request.configuration.deep_model not in allowed_models:
+            raise HTTPException(status_code=422, detail="The selected models do not belong to the verified provider connection")
     configured = _configured_definition(version.definition, run)
     validation = WorkflowValidator().validate(configured)
     if not validation.valid:
@@ -398,6 +481,7 @@ async def _execute_run(run_id: UUID) -> None:
                         "workflow": definition.model_dump(mode="json"),
                         "run": run.model_dump(mode="json"),
                         "checkpoint": checkpoint.model_dump(mode="json") if checkpoint else None,
+                        "connections": connections.runtime_connections(run.owner_id),
                     },
                 )
                 response.raise_for_status()
@@ -413,10 +497,34 @@ async def _execute_run(run_id: UUID) -> None:
         detailed_report = build_detailed_report(body["report"], body["nodes"], updated)
         store.save_result(run_id, {"nodes": body["nodes"], "report": detailed_report})
         return
+    if run.configuration.data_mode == "recorded":
+        local_executors = deterministic_executors()
+    else:
+        from omnitrade.engine.catalog import NODE_CATALOG
+        from omnitrade.services import NodeTask, execute_task, model_execute, report_execute
+
+        async def local_execute(node: Any, inputs: dict[str, Any], context: Any) -> Any:
+            all_connections = connections.runtime_connections(run.owner_id)
+            if node.type.startswith("fetch_"):
+                config = run.configuration
+                selected = set(config.market_providers + config.fundamental_providers + config.news_providers + config.sentiment_providers + config.macro_providers)
+            elif NODE_CATALOG[node.type].group in {"specialist", "research", "risk", "output"}:
+                selected = {run.configuration.model_provider}
+            else:
+                selected = set()
+            task = NodeTask(node=node, inputs=inputs, run=context.run, connections={name: value for name, value in all_connections.items() if name in selected})
+            if NODE_CATALOG[node.type].group in {"specialist", "research", "risk"}:
+                return (await model_execute(task)).output
+            if NODE_CATALOG[node.type].group == "output":
+                return (await report_execute(task)).output
+            return (await execute_task(task)).output
+
+        local_executors = {name: local_execute for name in NODE_CATALOG}
     runtime = WorkflowRuntime(
-        deterministic_executors(),
+        local_executors,
         listener=_event_listener,
         cancellation_probe=_local_cancellation_probe,
+        connections=connections.runtime_connections(run.owner_id),
     )
     result = await runtime.execute(definition, run, restored=checkpoint)
     report_node: Any = next(
