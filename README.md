@@ -201,7 +201,13 @@ Bedrock, Ollama, and other OpenAI-compatible servers. Data connections cover
 Yahoo Finance, Alpha Vantage, FRED, Polymarket, and optional StockTwits and
 Reddit public feeds. Yahoo and Polymarket can be connected automatically.
 StockTwits and Reddit must be selected and verified manually because their
-anonymous public endpoints may reject or rate-limit requests.
+anonymous public endpoints may reject or rate-limit requests. A failed optional
+public feed is removed from the session instead of being left as usable. Alpha
+Vantage requires its own API key.
+
+New Analysis shows a verified provider map and places every provider only in
+the roles supported by its API. The How to Use tab contains expandable steps
+for every index range and an openable/downloadable complete guide file.
 
 Amazon Bedrock accepts either an AWS Bedrock bearer token or standard temporary
 AWS credentials. The user can register several Bedrock model IDs and choose
@@ -215,12 +221,6 @@ the position limit changes decision guidance, excluded sectors can block a
 Workflow Lab uses the same typed-port rules as the backend validator. Selecting
 a node shows its role and safe next-node suggestions. An invalid edge is blocked
 before it enters the draft.
-
-To prove that graph editing changes real execution, run a baseline, remove the
-optional `sentiment_analyst` node and its edges, validate, publish, and repeat
-the same analysis settings. The new report records a new workflow version and
-does not contain the Sentiment Analyst view. See the
-[step-by-step user guide](docs/USER_GUIDE.md#professor-demo-show-that-a-graph-change-affects-the-output).
 
 ## API
 

@@ -30,6 +30,10 @@ export function automaticKeylessProviders(specs: Record<string, ConnectionSpec>)
     .map(([name]) => name);
 }
 
+export function isOptionalPublicFeed(spec?: ConnectionSpec): boolean {
+  return Boolean(spec?.category === 'data' && spec.key_optional && spec.auto_connect === false);
+}
+
 export default function ConnectionsPage() {
   const [specs, setSpecs] = useState<Record<string, ConnectionSpec>>({});
   const [statuses, setStatuses] = useState<ConnectionStatus[]>([]);
@@ -103,6 +107,7 @@ export default function ConnectionsPage() {
       await reload();
       setMessage('Connection verified and ready.');
     } catch (error) {
+      if (isOptionalPublicFeed(spec)) await deleteConnection(provider).catch(() => undefined);
       await reload();
       setMessage(String(error));
     } finally {
@@ -143,6 +148,8 @@ export default function ConnectionsPage() {
           </TextField>
           {spec && <Alert severity="info">{spec.category === 'model' ? 'This provider writes agent explanations from grounded evidence.' : `Capabilities: ${spec.capabilities.join(', ')}`}</Alert>}
           {spec?.availability_note && <Alert severity="warning">{spec.availability_note}</Alert>}
+          {spec?.credential_note && <Alert severity="info">{spec.credential_note}</Alert>}
+          {provider === 'alpha_vantage' && <Alert severity="info">To connect: enter your Alpha Vantage API key, select <b>Save session connection</b>, then select <b>Verify now</b>. It will appear in every supported New Analysis chain only after verification.</Alert>}
 
           {spec?.category === 'model' && <>
             {(provider === 'bedrock' || !spec.models.length) && <TextField
@@ -198,9 +205,8 @@ export default function ConnectionsPage() {
             <Button variant="outlined" startIcon={<VerifiedIcon/>} disabled={busy || !status?.configured} onClick={verify}>Verify now</Button>
             <Button color="error" startIcon={<DeleteOutlineIcon/>} disabled={!status?.configured} onClick={async () => { await deleteConnection(provider); await reload(); }}>Remove</Button>
           </Stack>
-          {status && (
-            <Chip color={status.verified ? 'success' : status.configured ? 'warning' : 'default'} label={status.message}/>
-          )}
+          {status?.verified && <Chip color="success" label="Verified and usable in New Analysis"/>}
+          {status?.configured && !status.verified && <Alert severity="error">Saved but not usable: {status.message}</Alert>}
         </Stack></CardContent></Card>
       </Grid>
 
@@ -212,7 +218,7 @@ export default function ConnectionsPage() {
             <Typography variant="caption" color="text.secondary">This safely connects Yahoo Finance and Polymarket. StockTwits and Reddit are optional public feeds and must pass manual verification before use.</Typography>
             {statuses.some(item => item.configured) ? statuses.filter(item => item.configured).map(item => <Box key={item.provider} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
               <span>{specs[item.provider]?.label ?? item.provider}</span>
-              <Chip size="small" color={item.verified ? 'success' : 'warning'} label={item.verified ? 'Verified' : 'Needs verification'}/>
+              <Chip size="small" color={item.verified ? 'success' : 'error'} label={item.verified ? 'Verified' : 'Not usable — verify or remove'}/>
             </Box>) : <Typography color="text.secondary">No connections saved in this session.</Typography>}
           </Stack>
         </CardContent></Card>

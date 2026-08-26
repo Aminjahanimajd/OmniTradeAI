@@ -4,7 +4,7 @@ import SaveIcon from'@mui/icons-material/Save';
 import{getAnalysisOptions,getProfile,saveProfile}from'../api';
 import type{AnalysisOptions,UserProfile}from'../types';
 
-const emptyOptions:AnalysisOptions={tickers:[],quick_models:[],deep_models:[],languages:[],currencies:[],data_modes:[],model_providers:[],provider_models:{},data_providers:[],data_provider_capabilities:{}};
+const emptyOptions:AnalysisOptions={tickers:[],quick_models:[],deep_models:[],languages:[],currencies:[],data_modes:[],model_providers:[],provider_models:{},data_providers:[],data_provider_labels:{},data_provider_capabilities:{}};
 function FixedDefault({label,value}:{label:string;value:string}){return<Box sx={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:2,p:1.4,border:'1px solid',borderColor:'divider',borderRadius:2}}><Typography variant="body2" color="text.secondary">{label}</Typography><Chip label={value.replaceAll('_',' ')} color="primary" variant="outlined"/></Box>}
 
 export default function ProfilePage(){

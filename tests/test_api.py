@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import httpx
 from fastapi.testclient import TestClient
 
 from omnitrade.api import _configured_definition, app
@@ -94,6 +95,7 @@ def test_connection_credentials_are_write_only() -> None:
         assert providers["yfinance"]["auto_connect"] is True
         assert providers["stocktwits"]["auto_connect"] is False
         assert providers["reddit"]["availability_note"]
+        assert "API key" in providers["alpha_vantage"]["credential_note"]
         saved = client.put(
             "/api/v1/connections/openai",
             headers=headers,
@@ -120,6 +122,55 @@ def test_connection_credentials_are_write_only() -> None:
         assert bedrock.status_code == 200
         assert "private-bedrock-token" not in bedrock.text
         assert len(bedrock.json()["models"]) == 2
+
+
+def test_failed_optional_public_feed_is_removed_and_error_is_short(monkeypatch) -> None:
+    async def blocked(_value):
+        request = httpx.Request("GET", "https://provider.example/private-path")
+        response = httpx.Response(429, request=request)
+        raise httpx.HTTPStatusError("rate limited", request=request, response=response)
+
+    monkeypatch.setattr("omnitrade.api.verify_connection", blocked)
+    with TestClient(app) as client:
+        headers = auth(client)
+        saved = client.put(
+            "/api/v1/connections/reddit",
+            headers=headers,
+            json={"provider": "reddit"},
+        )
+        assert saved.status_code == 200
+        failed = client.post("/api/v1/connections/reddit/verify", headers=headers)
+        assert failed.status_code == 422
+        assert "HTTP 429" in failed.json()["detail"]
+        assert "private-path" not in failed.text
+        statuses = client.get("/api/v1/connections", headers=headers).json()
+        reddit = next(item for item in statuses if item["provider"] == "reddit")
+        assert reddit["configured"] is False
+
+
+def test_verified_data_provider_labels_and_roles_reach_analysis(monkeypatch) -> None:
+    async def ready(_value):
+        return "Data connection verified"
+
+    monkeypatch.setattr("omnitrade.api.verify_connection", ready)
+    with TestClient(app) as client:
+        headers = auth(client)
+        for provider in ("fred", "polymarket"):
+            client.put(
+                f"/api/v1/connections/{provider}",
+                headers=headers,
+                json={"provider": provider},
+            )
+            assert client.post(
+                f"/api/v1/connections/{provider}/verify", headers=headers
+            ).status_code == 200
+        options = client.get("/api/v1/analysis-options", headers=headers).json()
+        assert options["data_provider_labels"]["fred"] == "FRED"
+        assert options["data_provider_labels"]["polymarket"] == "Polymarket"
+        assert options["data_provider_capabilities"]["fred"] == ["macro"]
+        assert "macro" in options["data_provider_capabilities"]["polymarket"]
+        for provider in ("fred", "polymarket"):
+            client.delete(f"/api/v1/connections/{provider}", headers=headers)
 
 
 def test_sample_workflow_creation_is_idempotent() -> None:

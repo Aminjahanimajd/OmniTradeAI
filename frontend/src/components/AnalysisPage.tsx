@@ -23,12 +23,20 @@ const defaultBudget: Budget = {
   max_tokens: 40000, max_parallel_nodes: 8,
 };
 const emptyOptions: AnalysisOptions = {
-  tickers: [], quick_models: [], deep_models: [], languages: [], currencies: [], data_modes: [], model_providers: [], provider_models: {}, data_providers: [], data_provider_capabilities: {},
+  tickers: [], quick_models: [], deep_models: [], languages: [], currencies: [], data_modes: [], model_providers: [], provider_models: {}, data_providers: [], data_provider_labels: {}, data_provider_capabilities: {},
 };
 
 export function optionControlMode(values: string[]): 'empty' | 'fixed' | 'select' {
   if (!values.length) return 'empty';
   return values.length === 1 ? 'fixed' : 'select';
+}
+
+export function providerRoles(options: AnalysisOptions) {
+  return options.data_providers.map(name => ({
+    name,
+    label: options.data_provider_labels[name] ?? name.replaceAll('_', ' '),
+    capabilities: options.data_provider_capabilities[name] ?? [],
+  }));
 }
 
 function FixedOption({ label, value }: { label: string; value: string }) {
@@ -91,11 +99,17 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
   const chainFields = [
     ['market_providers', 'Market data chain', 'market', 'Price, volume, and technical market evidence.'],
     ['fundamental_providers', 'Fundamental data chain', 'fundamentals', 'Company accounts, valuation, and business facts.'],
+    ['macro_providers', 'Macro data chain', 'macro', 'Rates, economic series, and prediction-market evidence.'],
     ['news_providers', 'News data chain', 'news', 'Current company and market articles.'],
     ['sentiment_providers', 'News and social sentiment chain', 'sentiment', 'Sentiment scores from verified text sources.'],
-    ['macro_providers', 'Macro data chain', 'macro', 'Rates, economic series, and prediction-market evidence.'],
   ] as [keyof RunConfiguration, string, string, string][];
   const providerModels = options.provider_models[config.model_provider] ?? [];
+  const verifiedProviderRoles = providerRoles(options);
+
+  const toggleChainProvider = (key: keyof RunConfiguration, name: string) => {
+    const current = config[key] as string[];
+    update(key, (current.includes(name) ? current.filter(value => value !== name) : [...current, name]) as RunConfiguration[typeof key]);
+  };
 
   async function start() {
     setBusy(true);
@@ -135,13 +149,29 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
             {options.data_modes.length > 1 ? <TextField select label="Data mode" value={config.data_mode} onChange={event => update('data_mode', event.target.value)}>
               {options.data_modes.map(mode => <MenuItem value={mode} key={mode}>{mode === 'recorded' ? 'Recorded data - tests only' : 'Real provider data'}</MenuItem>)}
             </TextField> : <Alert severity="success">Real verified data is always used. Test fixtures are not available here.</Alert>}
-            <Alert severity="info">One provider can support several real data roles. Yahoo Finance may repeat because it is verified for market, company, news, and news-sentiment data. Connect Alpha Vantage, FRED, or another provider to add choices.</Alert>
+            <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Typography variant="subtitle2" fontWeight={800} gutterBottom>Verified provider map</Typography>
+              <Typography variant="caption" color="text.secondary">A provider appears only in the chains supported by its real API.</Typography>
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                {verifiedProviderRoles.map(item => <Box key={item.name} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                  <Typography variant="body2" fontWeight={700}>{item.label}</Typography>
+                  <Stack direction="row" gap={.5} flexWrap="wrap" justifyContent="flex-end">{item.capabilities.map(capability => <Chip key={capability} size="small" label={capability.replaceAll('_', ' ')} variant="outlined"/>)}</Stack>
+                </Box>)}
+              </Stack>
+            </Box>
+            <Alert severity="info">FRED and Polymarket are macro sources. Yahoo Finance covers market, company, news, and news sentiment. Alpha Vantage can add choices to all five chains after its API key is verified.</Alert>
             {chainFields.map(([key, label, capability, help]) => {
               const values = options.data_providers.filter(name => options.data_provider_capabilities[name]?.includes(capability));
               const mode = optionControlMode(values);
               if (mode === 'empty') return <Alert key={key} severity="warning">No verified {label.toLowerCase()}. Connect one in Connections.</Alert>;
-              if (mode === 'fixed') return <Box key={key}><FixedOption label={label} value={values[0]}/><Typography variant="caption" color="text.secondary">{help}</Typography></Box>;
-              return <TextField key={key} select SelectProps={{ multiple: true }} label={label} helperText={help} value={config[key] as string[]} onChange={event => update(key, event.target.value as RunConfiguration[typeof key])}>{values.map(name => <MenuItem key={name} value={name}>{name.replaceAll('_', ' ')}</MenuItem>)}</TextField>;
+              if (mode === 'fixed') return <Box key={key}><FixedOption label={label} value={options.data_provider_labels[values[0]] ?? values[0]}/><Typography variant="caption" color="text.secondary">{help}</Typography></Box>;
+              return <Box key={key} sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                <Typography variant="subtitle2" fontWeight={800}>{label}</Typography>
+                <Typography variant="caption" color="text.secondary">{help} Select one or more sources.</Typography>
+                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
+                  {values.map(name => <FormControlLabel key={name} sx={{ m: 0, pr: 1.2, border: '1px solid', borderColor: (config[key] as string[]).includes(name) ? 'primary.main' : 'divider', borderRadius: 2 }} control={<Checkbox size="small" checked={(config[key] as string[]).includes(name)} onChange={() => toggleChainProvider(key, name)}/>} label={options.data_provider_labels[name] ?? name.replaceAll('_', ' ')}/>) }
+                </Stack>
+              </Box>;
             })}
           </Stack>
         </CardContent></Card>

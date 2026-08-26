@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { optionControlMode } from './AnalysisPage';
+import { optionControlMode, providerRoles } from './AnalysisPage';
 import { activeWorkflow } from '../workflows';
 import type { WorkflowRecord } from '../types';
 
@@ -34,5 +34,17 @@ describe('optionControlMode', () => {
     expect(optionControlMode([])).toBe('empty');
     expect(optionControlMode(['only'])).toBe('fixed');
     expect(optionControlMode(['first', 'second'])).toBe('select');
+  });
+
+  it('maps every verified provider only to its supported data roles', () => {
+    const roles = providerRoles({
+      tickers: [], quick_models: [], deep_models: [], languages: [], currencies: [], data_modes: [],
+      model_providers: [], provider_models: {}, data_providers: ['fred', 'polymarket', 'yfinance'],
+      data_provider_labels: { fred: 'FRED', polymarket: 'Polymarket', yfinance: 'Yahoo Finance' },
+      data_provider_capabilities: { fred: ['macro'], polymarket: ['macro', 'prediction_markets'], yfinance: ['market', 'fundamentals', 'news', 'sentiment'] },
+    });
+    expect(roles.find(item => item.name === 'fred')?.capabilities).toEqual(['macro']);
+    expect(roles.find(item => item.name === 'polymarket')?.capabilities).toContain('macro');
+    expect(roles.find(item => item.name === 'yfinance')?.capabilities).not.toContain('macro');
   });
 });

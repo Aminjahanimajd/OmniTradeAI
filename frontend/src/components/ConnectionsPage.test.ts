@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { automaticKeylessProviders } from './ConnectionsPage';
+import { automaticKeylessProviders, isOptionalPublicFeed } from './ConnectionsPage';
 import type { ConnectionSpec } from '../types';
 
 function spec(label: string, autoConnect: boolean): ConnectionSpec {
@@ -14,5 +14,10 @@ describe('automaticKeylessProviders', () => {
       stocktwits: spec('StockTwits', false),
       reddit: spec('Reddit', false),
     })).toEqual(['yfinance', 'polymarket']);
+  });
+
+  it('identifies public feeds that must be removed after failed verification', () => {
+    expect(isOptionalPublicFeed(spec('Reddit', false))).toBe(true);
+    expect(isOptionalPublicFeed(spec('Yahoo Finance', true))).toBe(false);
   });
 });

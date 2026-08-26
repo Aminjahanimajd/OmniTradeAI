@@ -19,6 +19,7 @@ from omnitrade.connections import (
     ConnectionInput,
     connections,
     discover_models,
+    verification_error_message,
     verify_connection,
 )
 from omnitrade.contracts import (
@@ -113,6 +114,7 @@ def connection_catalog(_: User = Depends(current_user)) -> dict[str, object]:
                   "label": spec["label"], "category": spec["category"],
                   "base_url": spec.get("base_url"), "key_optional": spec.get("key_optional", False),
                   "auto_connect": spec.get("auto_connect"), "availability_note": spec.get("availability_note"),
+                  "credential_note": spec.get("credential_note"),
                   "models": spec.get("models", []), "capabilities": spec.get("capabilities", []),
             }
             for name, spec in PROVIDER_CATALOG.items()
@@ -140,8 +142,13 @@ async def verify_saved_connection(provider: str, user: User = Depends(current_us
     try:
         message = await verify_connection(value)
     except Exception as exc:
-        connections.mark_verified(user.id, provider, False, str(exc))
-        raise HTTPException(status_code=422, detail=f"Connection failed: {exc}") from exc
+        message = verification_error_message(provider, exc)
+        spec = PROVIDER_CATALOG[provider]
+        if spec["category"] == "data" and spec.get("key_optional") and spec.get("auto_connect") is False:
+            connections.delete(user.id, provider)
+        else:
+            connections.mark_verified(user.id, provider, False, message)
+        raise HTTPException(status_code=422, detail=f"Connection failed: {message}") from exc
     connections.mark_verified(user.id, provider, True, message)
     return connections.status(user.id, provider).model_dump(mode="json")
 
@@ -181,6 +188,7 @@ def analysis_options(user: User = Depends(current_user)) -> dict[str, object]:
         "model_providers": sorted(name for name in verified if name in MODEL_PROVIDERS),
         "provider_models": verified_models,
         "data_providers": sorted(name for name in verified if PROVIDER_CATALOG[name]["category"] == "data"),
+        "data_provider_labels": {name: PROVIDER_CATALOG[name]["label"] for name in verified if PROVIDER_CATALOG[name]["category"] == "data"},
         "data_provider_capabilities": {name: PROVIDER_CATALOG[name].get("capabilities", []) for name in verified if PROVIDER_CATALOG[name]["category"] == "data"},
         "languages": ["English", "Italian", "Chinese", "Japanese", "Korean", "Hindi", "Spanish", "Portuguese", "French", "German", "Arabic", "Russian"],
         "currencies": ["USD", "EUR", "GBP", "JPY"],
