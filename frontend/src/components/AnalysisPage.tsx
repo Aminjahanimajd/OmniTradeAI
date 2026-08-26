@@ -5,7 +5,8 @@ import {
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { createRun, getAnalysisOptions, getProfile, listWorkflows } from '../api';
-import type { AnalysisOptions, Budget, RunConfiguration, WorkflowRecord } from '../types';
+import type { AnalysisOptions, Budget, RunConfiguration } from '../types';
+import { activeWorkflow } from '../workflows';
 
 const defaultConfig: RunConfiguration = {
   data_mode: 'live', analysts: ['market', 'fundamentals', 'news', 'sentiment'],
@@ -25,17 +26,6 @@ const emptyOptions: AnalysisOptions = {
   tickers: [], quick_models: [], deep_models: [], languages: [], currencies: [], data_modes: [], model_providers: [], provider_models: {}, data_providers: [], data_provider_capabilities: {},
 };
 
-export function latestPublishedWorkflows(items: WorkflowRecord[]): WorkflowRecord[] {
-  const latest = new Map<string, WorkflowRecord>();
-  for (const workflow of items) {
-    if (!workflow.published_version_id) continue;
-    const name = workflow.definition.name.trim().toLowerCase();
-    const current = latest.get(name);
-    if (!current || workflow.version >= current.version) latest.set(name, workflow);
-  }
-  return [...latest.values()].sort((left, right) => left.definition.name.localeCompare(right.definition.name));
-}
-
 export function optionControlMode(values: string[]): 'empty' | 'fixed' | 'select' {
   if (!values.length) return 'empty';
   return values.length === 1 ? 'fixed' : 'select';
@@ -49,9 +39,9 @@ function FixedOption({ label, value }: { label: string; value: string }) {
 }
 
 export default function AnalysisPage({ onCreated }: { onCreated: (id: string) => void }) {
-  const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [options, setOptions] = useState(emptyOptions);
   const [version, setVersion] = useState('');
+  const [workflowLabel, setWorkflowLabel] = useState('');
   const [ticker, setTicker] = useState('AAPL');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [config, setConfig] = useState(defaultConfig);
@@ -62,9 +52,9 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
   useEffect(() => {
     void Promise.all([listWorkflows(), getProfile(), getAnalysisOptions()])
       .then(([items, profile, available]) => {
-        const published = latestPublishedWorkflows(items);
-        setWorkflows(published);
-        setVersion(published[0]?.published_version_id ?? '');
+        const workflow = activeWorkflow(items);
+        setVersion(workflow?.published_version_id ?? '');
+        setWorkflowLabel(workflow?.published_version_id ? `${workflow.definition.name} · version ${workflow.version}` : '');
         setOptions(available);
         setTicker(available.tickers.includes(profile.default_ticker) ? profile.default_ticker : available.tickers[0] ?? 'AAPL');
         const modelProvider = available.model_providers.includes(profile.default_configuration.model_provider) ? profile.default_configuration.model_provider : available.model_providers[0] ?? 'fixture';
@@ -99,12 +89,12 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
       : [...config.analysts, name],
   );
   const chainFields = [
-    ['market_providers', 'Market data chain', 'market'],
-    ['fundamental_providers', 'Fundamental data chain', 'fundamentals'],
-    ['news_providers', 'News data chain', 'news'],
-    ['sentiment_providers', 'Social sentiment chain', 'sentiment'],
-    ['macro_providers', 'Macro data chain', 'macro'],
-  ] as [keyof RunConfiguration, string, string][];
+    ['market_providers', 'Market data chain', 'market', 'Price, volume, and technical market evidence.'],
+    ['fundamental_providers', 'Fundamental data chain', 'fundamentals', 'Company accounts, valuation, and business facts.'],
+    ['news_providers', 'News data chain', 'news', 'Current company and market articles.'],
+    ['sentiment_providers', 'News and social sentiment chain', 'sentiment', 'Sentiment scores from verified text sources.'],
+    ['macro_providers', 'Macro data chain', 'macro', 'Rates, economic series, and prediction-market evidence.'],
+  ] as [keyof RunConfiguration, string, string, string][];
   const providerModels = options.provider_models[config.model_provider] ?? [];
 
   async function start() {
@@ -128,16 +118,14 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
       <Typography color="text.secondary">The selected real providers, models, agents, risk rules, and report options control this workflow run.</Typography>
     </Box>
     {message && <Alert severity="error">{message}</Alert>}
-    {!workflows.length && <Alert severity="warning">Publish a valid workflow before starting an analysis.</Alert>}
+    {!version && <Alert severity="warning">Open Workflow Lab, validate the graph, and publish it before starting an analysis.</Alert>}
     {(!options.model_providers.length||!options.data_providers.length)&&<Alert severity="warning">Open Connections and verify at least one AI model provider and the real data providers needed by this workflow.</Alert>}
     <Grid container spacing={2}>
       <Grid item xs={12} md={6}>
         <Card><CardContent>
-          <Typography variant="h6" fontWeight={800} gutterBottom>1. Instrument and workflow</Typography>
+          <Typography variant="h6" fontWeight={800} gutterBottom>1. Instrument and data</Typography>
           <Stack spacing={2}>
-            {workflows.length > 1 ? <TextField select label="Published workflow" value={version} onChange={event => setVersion(event.target.value)}>
-              {workflows.map(workflow => <MenuItem key={workflow.published_version_id} value={workflow.published_version_id}>{workflow.definition.name} - version {workflow.version}</MenuItem>)}
-            </TextField> : workflows.length === 1 ? <FixedOption label="Workflow" value={`${workflows[0].definition.name} · version ${workflows[0].version}`}/> : null}
+            {workflowLabel && <Alert severity="info">The latest published Workflow Lab graph is used automatically: <b>{workflowLabel}</b>.</Alert>}
             <Autocomplete
               disableClearable options={options.tickers} value={ticker}
               onChange={(_, value) => setTicker(value)}
@@ -147,12 +135,13 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
             {options.data_modes.length > 1 ? <TextField select label="Data mode" value={config.data_mode} onChange={event => update('data_mode', event.target.value)}>
               {options.data_modes.map(mode => <MenuItem value={mode} key={mode}>{mode === 'recorded' ? 'Recorded data - tests only' : 'Real provider data'}</MenuItem>)}
             </TextField> : <Alert severity="success">Real verified data is always used. Test fixtures are not available here.</Alert>}
-            {chainFields.map(([key, label, capability]) => {
+            <Alert severity="info">One provider can support several real data roles. Yahoo Finance may repeat because it is verified for market, company, news, and news-sentiment data. Connect Alpha Vantage, FRED, or another provider to add choices.</Alert>
+            {chainFields.map(([key, label, capability, help]) => {
               const values = options.data_providers.filter(name => options.data_provider_capabilities[name]?.includes(capability));
               const mode = optionControlMode(values);
               if (mode === 'empty') return <Alert key={key} severity="warning">No verified {label.toLowerCase()}. Connect one in Connections.</Alert>;
-              if (mode === 'fixed') return <FixedOption key={key} label={label} value={values[0]}/>;
-              return <TextField key={key} select SelectProps={{ multiple: true }} label={label} value={config[key] as string[]} onChange={event => update(key, event.target.value as RunConfiguration[typeof key])}>{values.map(name => <MenuItem key={name} value={name}>{name.replaceAll('_', ' ')}</MenuItem>)}</TextField>;
+              if (mode === 'fixed') return <Box key={key}><FixedOption label={label} value={values[0]}/><Typography variant="caption" color="text.secondary">{help}</Typography></Box>;
+              return <TextField key={key} select SelectProps={{ multiple: true }} label={label} helperText={help} value={config[key] as string[]} onChange={event => update(key, event.target.value as RunConfiguration[typeof key])}>{values.map(name => <MenuItem key={name} value={name}>{name.replaceAll('_', ' ')}</MenuItem>)}</TextField>;
             })}
           </Stack>
         </CardContent></Card>
@@ -176,7 +165,8 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         <Card><CardContent>
           <Typography variant="h6" fontWeight={800} gutterBottom>3. Models and report</Typography>
           <Stack spacing={2}>
-            {optionControlMode(options.model_providers) === 'empty' ? <Alert severity="warning">No verified AI provider. Connect and verify one in Connections.</Alert> : optionControlMode(options.model_providers) === 'fixed' ? <FixedOption label="Model provider" value={options.model_providers[0]}/> : <TextField select label="Model provider" value={config.model_provider} onChange={event => { const name = event.target.value; const models = options.provider_models[name] ?? []; setConfig(current => ({ ...current, model_provider: name, quick_model: models[0] ?? '', deep_model: models.at(-1) ?? '' })); }}>
+            <Typography variant="body2" color="text.secondary">Your Profile default is preselected. If two or more providers are verified, you can change it for this run.</Typography>
+            {optionControlMode(options.model_providers) === 'empty' ? <Alert severity="warning">No verified AI provider. Connect and verify one in Connections.</Alert> : optionControlMode(options.model_providers) === 'fixed' ? <FixedOption label="Only verified model provider" value={options.model_providers[0]}/> : <TextField select label="Model provider" value={config.model_provider} onChange={event => { const name = event.target.value; const models = options.provider_models[name] ?? []; setConfig(current => ({ ...current, model_provider: name, quick_model: models[0] ?? '', deep_model: models.at(-1) ?? '' })); }}>
               {options.model_providers.map(name => <MenuItem value={name} key={name}>{name.replaceAll('_', ' ')}</MenuItem>)}
             </TextField>}
             {optionControlMode(providerModels) === 'empty' ? <Alert severity="warning">No models are configured for this provider.</Alert> : optionControlMode(providerModels) === 'fixed' ? <FixedOption label="Quick and deep model" value={providerModels[0]}/> : <>

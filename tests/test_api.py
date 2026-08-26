@@ -90,6 +90,10 @@ def test_connection_credentials_are_write_only() -> None:
         catalog = client.get("/api/v1/connections/catalog", headers=headers)
         assert catalog.status_code == 200
         assert "openai" in catalog.json()["providers"]
+        providers = catalog.json()["providers"]
+        assert providers["yfinance"]["auto_connect"] is True
+        assert providers["stocktwits"]["auto_connect"] is False
+        assert providers["reddit"]["availability_note"]
         saved = client.put(
             "/api/v1/connections/openai",
             headers=headers,

@@ -14,6 +14,10 @@ FR-28 maps option cardinality to adaptive New Analysis and Profile controls.
 FR-29 maps Bedrock bearer-token input to the direct Converse client, configured
 model list, redaction tests and live verification. FR-30 maps the in-app How to
 Use page to `docs/USER_GUIDE.md`.
+FR-31 maps the shared active-workflow policy to Workflow Lab and New Analysis.
+FR-32 maps provider capability labels and safe keyless connection rules to the
+catalog and Connections page. FR-33 maps saved Profile model defaults to the
+verified choices shown on New Analysis.
 
 | Requirement | Components | Main verification |
 |---|---|---|
@@ -35,3 +39,6 @@ Use page to `docs/USER_GUIDE.md`.
 | FR-28 | adaptive selectors and fixed-option summaries | `AnalysisPage.test.ts` and browser inspection |
 | FR-29 | Bedrock connection input, direct Converse client and model list | `test_model_gateway.py`, `test_api.py`, live check |
 | FR-30 | How to Use tab and user guide | content review |
+| FR-31 | active workflow helper, Workflow Lab, New Analysis | unit test and two-run demo |
+| FR-32 | provider catalog, Connections, analysis data chains | API and GUI unit tests |
+| FR-33 | Profile defaults, analysis options, New Analysis | frontend build and browser inspection |

@@ -61,11 +61,11 @@ only as study references; their workflow code was not copied or renamed.
 | Area | What the user can do |
 |---|---|
 | Connections | Add private provider credentials, discover models, and verify each real connection before use. |
-| New Analysis | Select a stock, analysts, research depth, risk profile, models, real provider chains, report detail, language, currency, freshness, and budgets. |
+| New Analysis | Automatically use the latest published Workflow Lab graph, then select a stock, agents, verified providers, models, policy, and budgets. |
 | Agent Room | Follow real workflow events and read the output and impact of each agent. |
 | Reports | Browse saved reports by calendar, compare agent views, inspect evidence, and export PDF or JSON. |
 | Workflow Lab | Build, undo, validate, publish, and run typed workflow graphs with smart connection suggestions. |
-| Profiles | Set horizon, experience, loss limit, position limit, and excluded sectors that directly change analysis and decision rules. |
+| Profiles | Save default AI models plus horizon, experience, loss limit, position limit, and excluded sectors that change analysis and decision rules. |
 | Recovery | Cancel work or resume from checkpoints without repeating completed nodes. |
 
 ## System workflow
@@ -184,7 +184,7 @@ Replace all example credentials and secrets before any shared deployment.
 ## Using the application
 
 1. Open **Connections**, save the needed provider settings, and verify each connection.
-2. Open **New Analysis** and choose the stock, provider chains, models, agents, and analysis policy.
+2. Open **New Analysis**. It uses the latest published Workflow Lab graph automatically. Choose the stock, provider chains, models, agents, and analysis policy.
 3. Start the run and follow each node in **Agent Room**.
 4. Open **Reports** to read every analyst, debate, risk, and manager view.
 5. Use **Workflow Lab** for advanced graph editing, then save, validate, and publish it.
@@ -198,7 +198,10 @@ inserts recorded evidence when that chain fails.
 Model connections cover OpenAI, Gemini, Anthropic, xAI, DeepSeek, Qwen, GLM,
 MiniMax, OpenRouter, Mistral, Kimi, Groq, NVIDIA NIM, Azure OpenAI, Amazon
 Bedrock, Ollama, and other OpenAI-compatible servers. Data connections cover
-Yahoo Finance, Alpha Vantage, FRED, Polymarket, StockTwits, and Reddit public feeds.
+Yahoo Finance, Alpha Vantage, FRED, Polymarket, and optional StockTwits and
+Reddit public feeds. Yahoo and Polymarket can be connected automatically.
+StockTwits and Reddit must be selected and verified manually because their
+anonymous public endpoints may reject or rate-limit requests.
 
 Amazon Bedrock accepts either an AWS Bedrock bearer token or standard temporary
 AWS credentials. The user can register several Bedrock model IDs and choose
@@ -212,6 +215,12 @@ the position limit changes decision guidance, excluded sectors can block a
 Workflow Lab uses the same typed-port rules as the backend validator. Selecting
 a node shows its role and safe next-node suggestions. An invalid edge is blocked
 before it enters the draft.
+
+To prove that graph editing changes real execution, run a baseline, remove the
+optional `sentiment_analyst` node and its edges, validate, publish, and repeat
+the same analysis settings. The new report records a new workflow version and
+does not contain the Sentiment Analyst view. See the
+[step-by-step user guide](docs/USER_GUIDE.md#professor-demo-show-that-a-graph-change-affects-the-output).
 
 ## API
 

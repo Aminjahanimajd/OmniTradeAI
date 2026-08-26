@@ -3,7 +3,7 @@ import { Alert, Box, Card, CardContent, Chip, Grid, Stack, Typography } from '@m
 const topics = [
   ['0–10', 'Start the website', 'Run Docker Compose, open http://localhost:5173, and sign in with your local account.'],
   ['10–25', 'Connect AI', 'Open Connections. Select an AI provider, enter its private credential, add allowed model IDs, save, and verify.'],
-  ['25–35', 'Connect data', 'In Connections, use “Connect all keyless data sources”. Add and verify FRED or Alpha Vantage keys when available.'],
+  ['25–35', 'Connect data', 'In Connections, use “Connect supported keyless sources”. Add and verify FRED or Alpha Vantage keys when available. StockTwits and Reddit are optional manual connections.'],
   ['35–45', 'Set your profile', 'Choose a default stock, horizon, experience, loss limit, position limit, and excluded sectors. Save the profile.'],
   ['45–65', 'Create an analysis', 'Open New Analysis. Choose the stock, date, analyst branches, provider chains, quick model, deep model, risk level, and report detail.'],
   ['65–75', 'Check safety limits', 'Review runtime, model-call, provider-call, token, and parallel-node budgets. Then start the analysis.'],
@@ -33,6 +33,18 @@ export default function UserGuidePage() {
     <Card><CardContent>
       <Typography variant="h6" fontWeight={800} gutterBottom>When an option is missing</Typography>
       <Typography>Go to Connections and verify the required provider. New Analysis only shows providers and models that passed a real verification call. A provider that is down or blocked is never replaced with fake data.</Typography>
+    </CardContent></Card>
+    <Card><CardContent>
+      <Typography variant="h6" fontWeight={800} gutterBottom>Professor demo: prove that the graph changes the report</Typography>
+      <Stack component="ol" spacing={1} sx={{ pl: 2.5, color: 'text.secondary' }}>
+        <li>Run AAPL once with all four analysts. Save this as the baseline report.</li>
+        <li>Open Workflow Lab. Select the <b>sentiment analyst</b> node and press Delete. Delete its connected edges too.</li>
+        <li>Select <b>Validate</b>. The graph must be valid. Then select <b>Publish</b>.</li>
+        <li>Open New Analysis. It uses the new published graph automatically. Keep the same stock, date, models, data providers, risk profile, and budgets.</li>
+        <li>Run it again. Compare the two reports in Reports.</li>
+        <li>The second report has a new workflow version and no Sentiment Analyst point of view. The other agents and final decision now work without that input.</li>
+      </Stack>
+      <Alert severity="info" sx={{ mt: 2 }}>A different Buy/Hold/Sell result is possible, but not guaranteed. The defendable result is the changed workflow version, event path, agent list, and report content.</Alert>
     </CardContent></Card>
   </Stack>;
 }

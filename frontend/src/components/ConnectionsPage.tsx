@@ -24,6 +24,12 @@ function cleanModels(values: string[]): string[] {
   return [...new Set(values.map(value => value.trim()).filter(Boolean))];
 }
 
+export function automaticKeylessProviders(specs: Record<string, ConnectionSpec>): string[] {
+  return Object.entries(specs)
+    .filter(([, value]) => value.category === 'data' && value.key_optional && value.auto_connect !== false)
+    .map(([name]) => name);
+}
+
 export default function ConnectionsPage() {
   const [specs, setSpecs] = useState<Record<string, ConnectionSpec>>({});
   const [statuses, setStatuses] = useState<ConnectionStatus[]>([]);
@@ -106,8 +112,7 @@ export default function ConnectionsPage() {
 
   async function connectKeylessData() {
     setBusy(true);
-    const candidates = Object.entries(specs)
-      .filter(([, value]) => value.category === 'data' && value.key_optional);
+    const candidates = automaticKeylessProviders(specs).map(name => [name, specs[name]] as const);
     const results: string[] = [];
     for (const [name, value] of candidates) {
       try {
@@ -115,6 +120,7 @@ export default function ConnectionsPage() {
         await verifyConnection(name);
         results.push(`${value.label}: ready`);
       } catch {
+        await deleteConnection(name).catch(() => undefined);
         results.push(`${value.label}: unavailable`);
       }
     }
@@ -136,6 +142,7 @@ export default function ConnectionsPage() {
             {Object.entries(specs).map(([key, value]) => <MenuItem key={key} value={key}>{value.category === 'model' ? 'AI · ' : 'Data · '}{value.label}</MenuItem>)}
           </TextField>
           {spec && <Alert severity="info">{spec.category === 'model' ? 'This provider writes agent explanations from grounded evidence.' : `Capabilities: ${spec.capabilities.join(', ')}`}</Alert>}
+          {spec?.availability_note && <Alert severity="warning">{spec.availability_note}</Alert>}
 
           {spec?.category === 'model' && <>
             {(provider === 'bedrock' || !spec.models.length) && <TextField
@@ -201,7 +208,8 @@ export default function ConnectionsPage() {
         <Card><CardContent>
           <Stack spacing={1.5}>
             <Typography variant="h6" fontWeight={800}>Session status</Typography>
-            <Button startIcon={<AutoFixHighIcon/>} variant="outlined" disabled={busy || !Object.keys(specs).length} onClick={connectKeylessData}>Connect all keyless data sources</Button>
+            <Button startIcon={<AutoFixHighIcon/>} variant="outlined" disabled={busy || !Object.keys(specs).length} onClick={connectKeylessData}>Connect supported keyless sources</Button>
+            <Typography variant="caption" color="text.secondary">This safely connects Yahoo Finance and Polymarket. StockTwits and Reddit are optional public feeds and must pass manual verification before use.</Typography>
             {statuses.some(item => item.configured) ? statuses.filter(item => item.configured).map(item => <Box key={item.provider} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
               <span>{specs[item.provider]?.label ?? item.provider}</span>
               <Chip size="small" color={item.verified ? 'success' : 'warning'} label={item.verified ? 'Verified' : 'Needs verification'}/>

@@ -41,6 +41,9 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-28 | Configuration pages show a selector only when at least two valid choices exist; one choice is applied automatically and no choices produce an actionable setup message. | Adaptive-control unit test and browser inspection |
 | FR-29 | Amazon Bedrock accepts either a Bedrock bearer token or temporary AWS credentials and exposes all user-configured model IDs to analysis. | Bearer-header test, secret-redaction test and live verification |
 | FR-30 | A topic-based in-app guide explains the complete login-to-report workflow and common provider problems. | How-to page and user guide review |
+| FR-31 | New Analysis automatically runs the latest published Workflow Lab graph and cannot select an unrelated workflow. | Shared active-workflow helper and graph-change scenario |
+| FR-32 | Data-chain controls explain provider capabilities; unstable optional public feeds are not auto-connected or left in a false pending state. | Connection catalog, UI and unit tests |
+| FR-33 | Profile saves the default verified AI provider and quick/deep models; New Analysis permits a per-run change when alternatives exist. | Profile UI and adaptive-control tests |
 
 ## Quality requirements
 

@@ -20,10 +20,12 @@ Analysis. Secrets are not returned by the API and are not stored in reports.
 
 ## 25–35: Connect data
 
-Use **Connect all keyless data sources** for Yahoo Finance, Polymarket, Reddit,
-and StockTwits. A provider is marked ready only after a real request succeeds.
-FRED and Alpha Vantage require their own API keys. An unavailable provider is
-not replaced with fake data.
+Use **Connect supported keyless sources** for Yahoo Finance and Polymarket. A
+provider is marked ready only after a real request succeeds. FRED and Alpha
+Vantage require their own API keys. StockTwits and Reddit are optional public
+feeds. Their public endpoints may reject or rate-limit anonymous requests, so
+they are never auto-connected. Select either one manually only when you want to
+test its live availability. A failed connection is not replaced with fake data.
 
 ## 35–45: Set the profile
 
@@ -56,12 +58,35 @@ decision, warning, and lineage record. Export JSON or PDF when needed.
 ## 95–100: Advanced workflow editing
 
 Workflow Lab is optional. Edit the graph, use undo when needed, validate it,
-and publish a new version. Only a valid published version can run.
+and publish a new version. Only a valid published version can run. New Analysis
+automatically uses the latest publication from Workflow Lab, so it does not ask
+the user to choose a second workflow.
+
+## Professor demo: show that a graph change affects the output
+
+1. Run AAPL with all four analysts and keep the first report as the baseline.
+2. Open **Workflow Lab**.
+3. Select the `sentiment analyst` node and press Delete. Delete its connected
+   edges too.
+4. Select **Validate**. When the graph is valid, select **Publish**.
+5. Open **New Analysis**. It now uses the new published version automatically.
+6. Keep the same ticker, date, AI models, data providers, risk profile, report
+   detail, and budgets. Start the second run.
+7. Open **Reports** and compare both reports.
+
+The second report must show a different workflow version and no Sentiment
+Analyst point of view. Agent Room must also show a different event path. The
+remaining agents and final manager decision now work without sentiment-agent
+input. The final Buy/Hold/Sell action may change, but this is not guaranteed.
+The clear proof is the changed workflow version, event path, agent list, and
+report content.
 
 ## Troubleshooting
 
 - Empty model choices: verify an AI connection and configure at least one model ID.
 - Missing macro choices: verify FRED or Polymarket.
+- StockTwits or Reddit unavailable: these are optional public feeds. No action
+  is required; use another verified sentiment source or try manual verification later.
 - Provider unavailable: check its key, network access, quota, and rate limit.
 - Expired login: sign in again.
 - No report yet: open Agent Room and check the failed or running node.

@@ -1,18 +1,23 @@
 import{useEffect,useState}from'react';
-import{Alert,Autocomplete,Button,Card,CardContent,Divider,MenuItem,Stack,TextField,Typography}from'@mui/material';
+import{Alert,Autocomplete,Box,Button,Card,CardContent,Chip,Divider,MenuItem,Stack,TextField,Typography}from'@mui/material';
 import SaveIcon from'@mui/icons-material/Save';
 import{getAnalysisOptions,getProfile,saveProfile}from'../api';
-import type{UserProfile}from'../types';
+import type{AnalysisOptions,UserProfile}from'../types';
+
+const emptyOptions:AnalysisOptions={tickers:[],quick_models:[],deep_models:[],languages:[],currencies:[],data_modes:[],model_providers:[],provider_models:{},data_providers:[],data_provider_capabilities:{}};
+function FixedDefault({label,value}:{label:string;value:string}){return<Box sx={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:2,p:1.4,border:'1px solid',borderColor:'divider',borderRadius:2}}><Typography variant="body2" color="text.secondary">{label}</Typography><Chip label={value.replaceAll('_',' ')} color="primary" variant="outlined"/></Box>}
 
 export default function ProfilePage(){
   const[profile,setProfile]=useState<UserProfile>();
-  const[tickers,setTickers]=useState<string[]>([]);
+  const[options,setOptions]=useState<AnalysisOptions>(emptyOptions);
   const[message,setMessage]=useState('');
-  useEffect(()=>{void Promise.all([getProfile(),getAnalysisOptions()]).then(([value,options])=>{setProfile({...value,default_configuration:{...value.default_configuration,data_mode:'live'}});setTickers(options.tickers)}).catch(error=>setMessage(String(error)))},[]);
+  useEffect(()=>{void Promise.all([getProfile(),getAnalysisOptions()]).then(([value,available])=>{const provider=available.model_providers.includes(value.default_configuration.model_provider)?value.default_configuration.model_provider:available.model_providers[0]??'';const models=available.provider_models[provider]??[];setOptions(available);setProfile({...value,default_configuration:{...value.default_configuration,data_mode:'live',model_provider:provider,quick_model:models.includes(value.default_configuration.quick_model)?value.default_configuration.quick_model:models[0]??'',deep_model:models.includes(value.default_configuration.deep_model)?value.default_configuration.deep_model:models.at(-1)??''}})}).catch(error=>setMessage(String(error)))},[]);
   if(!profile)return<Alert severity="info">Loading profile...</Alert>;
   const config=profile.default_configuration;
   const policy=profile.investor_policy;
+  const models=options.provider_models[config.model_provider]??[];
   const updatePolicy=(key:keyof typeof policy,value:string|number|string[])=>setProfile({...profile,investor_policy:{...policy,[key]:value}});
+  const updateConfig=(values:Partial<typeof config>)=>setProfile({...profile,default_configuration:{...config,...values}});
   return<Stack spacing={2} sx={{maxWidth:850}}>
     <Typography variant="h4" fontWeight={800}>Profile and Investment Policy</Typography>
     <Typography color="text.secondary">Defaults fill the analysis form. Investment limits are copied into each run and change its risk validation.</Typography>
@@ -21,11 +26,14 @@ export default function ProfilePage(){
       <Typography variant="h6">Identity and defaults</Typography>
       <TextField label="Display name" value={profile.display_name} onChange={event=>setProfile({...profile,display_name:event.target.value})}/>
       <TextField label="Email (not used for decisions)" value={profile.email} onChange={event=>setProfile({...profile,email:event.target.value})}/>
-      <Autocomplete disableClearable options={tickers} value={profile.default_ticker} onChange={(_,value)=>setProfile({...profile,default_ticker:value})} renderInput={params=><TextField {...params} label="Default stock ticker" helperText="Choose a supported stock symbol"/>}/>
+      <Autocomplete disableClearable options={options.tickers} value={profile.default_ticker} onChange={(_,value)=>setProfile({...profile,default_ticker:value})} renderInput={params=><TextField {...params} label="Default stock ticker" helperText="Choose a supported stock symbol"/>}/>
       <Alert severity="success">All normal analyses use verified real provider data. There is no fake-data mode to select.</Alert>
-      <TextField select label="Default risk profile" value={config.risk_profile} onChange={event=>setProfile({...profile,default_configuration:{...config,risk_profile:event.target.value}})}><MenuItem value="conservative">Conservative</MenuItem><MenuItem value="balanced">Balanced</MenuItem><MenuItem value="aggressive">Aggressive</MenuItem></TextField>
-      <TextField type="number" label="Default research depth" value={config.research_depth} onChange={event=>setProfile({...profile,default_configuration:{...config,research_depth:Number(event.target.value)}})}/>
-      <TextField select label="Default report detail" value={config.report_detail} onChange={event=>setProfile({...profile,default_configuration:{...config,report_detail:event.target.value}})}><MenuItem value="summary">Summary</MenuItem><MenuItem value="standard">Standard</MenuItem><MenuItem value="detailed">Detailed</MenuItem></TextField>
+      <Typography variant="subtitle1" fontWeight={800}>Default AI models</Typography>
+      {!options.model_providers.length?<Alert severity="warning">Verify an AI provider in Connections before choosing model defaults.</Alert>:options.model_providers.length===1?<FixedDefault label="Only verified provider" value={options.model_providers[0]}/>:<TextField select label="Default model provider" value={config.model_provider} helperText="This becomes the first choice on New Analysis." onChange={event=>{const provider=event.target.value;const choices=options.provider_models[provider]??[];updateConfig({model_provider:provider,quick_model:choices[0]??'',deep_model:choices.at(-1)??''})}}>{options.model_providers.map(provider=><MenuItem key={provider} value={provider}>{provider.replaceAll('_',' ')}</MenuItem>)}</TextField>}
+      {models.length===1?<FixedDefault label="Quick and deep model" value={models[0]}/>:models.length>1?<><TextField select label="Default quick analysis model" value={config.quick_model} onChange={event=>updateConfig({quick_model:event.target.value})}>{models.map(model=><MenuItem key={model} value={model}>{model}</MenuItem>)}</TextField><TextField select label="Default deep reasoning model" value={config.deep_model} onChange={event=>updateConfig({deep_model:event.target.value})}>{models.map(model=><MenuItem key={model} value={model}>{model}</MenuItem>)}</TextField></>:null}
+      <TextField select label="Default risk profile" value={config.risk_profile} onChange={event=>updateConfig({risk_profile:event.target.value})}><MenuItem value="conservative">Conservative</MenuItem><MenuItem value="balanced">Balanced</MenuItem><MenuItem value="aggressive">Aggressive</MenuItem></TextField>
+      <TextField type="number" label="Default research depth" value={config.research_depth} onChange={event=>updateConfig({research_depth:Number(event.target.value)})}/>
+      <TextField select label="Default report detail" value={config.report_detail} onChange={event=>updateConfig({report_detail:event.target.value})}><MenuItem value="summary">Summary</MenuItem><MenuItem value="standard">Standard</MenuItem><MenuItem value="detailed">Detailed</MenuItem></TextField>
       <Divider/>
       <Typography variant="h6">Investment policy used by the risk agents</Typography>
       <TextField select label="Investment horizon" value={policy.investment_horizon} onChange={event=>updatePolicy('investment_horizon',event.target.value)}><MenuItem value="short">Short term</MenuItem><MenuItem value="medium">Medium term</MenuItem><MenuItem value="long">Long term</MenuItem></TextField>

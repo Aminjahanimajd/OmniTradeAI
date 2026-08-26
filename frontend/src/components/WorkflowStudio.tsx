@@ -13,6 +13,7 @@ import RedoIcon from '@mui/icons-material/Redo';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { createSample, getCatalog, listWorkflows, publishWorkflow, updateWorkflow, validateWorkflow } from '../api';
 import type { CatalogSuggestion, ValidationResult, WorkflowRecord } from '../types';
+import { activeWorkflow } from '../workflows';
 
 type Catalog = Awaited<ReturnType<typeof getCatalog>>['nodes'];
 type RawNode = { id: string; name: string; type: string; config: Record<string, unknown>; failure_policy: string; timeout_seconds: number; retry: Record<string, unknown>; position: { x: number; y: number } };
@@ -48,7 +49,7 @@ export default function WorkflowStudio() {
     setBusy(true);
     try {
       const [all, nodeCatalog] = await Promise.all([listWorkflows(), getCatalog()]);
-      const current = all[0] ?? await createSample();
+      const current = activeWorkflow(all) ?? await createSample();
       setCatalog(nodeCatalog.nodes);
       setWorkflow(current);
       const graph = toFlow(current, nodeCatalog.nodes);

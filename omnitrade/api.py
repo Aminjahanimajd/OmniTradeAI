@@ -110,9 +110,10 @@ def connection_catalog(_: User = Depends(current_user)) -> dict[str, object]:
     return {
         "providers": {
             name: {
-                "label": spec["label"], "category": spec["category"],
-                "base_url": spec.get("base_url"), "key_optional": spec.get("key_optional", False),
-                "models": spec.get("models", []), "capabilities": spec.get("capabilities", []),
+                  "label": spec["label"], "category": spec["category"],
+                  "base_url": spec.get("base_url"), "key_optional": spec.get("key_optional", False),
+                  "auto_connect": spec.get("auto_connect"), "availability_note": spec.get("availability_note"),
+                  "models": spec.get("models", []), "capabilities": spec.get("capabilities", []),
             }
             for name, spec in PROVIDER_CATALOG.items()
         }

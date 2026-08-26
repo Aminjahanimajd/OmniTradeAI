@@ -153,12 +153,12 @@ MODEL_PROVIDERS: dict[str, dict[str, Any]] = {
 }
 
 DATA_PROVIDERS: dict[str, dict[str, Any]] = {
-    "yfinance": {"label": "Yahoo Finance", "key_optional": True, "capabilities": ["market", "fundamentals", "news", "sentiment"]},
+    "yfinance": {"label": "Yahoo Finance", "key_optional": True, "auto_connect": True, "capabilities": ["market", "fundamentals", "news", "sentiment"]},
     "alpha_vantage": {"label": "Alpha Vantage", "base_url": "https://www.alphavantage.co/query", "capabilities": ["market", "fundamentals", "news", "sentiment", "macro"]},
     "fred": {"label": "FRED", "base_url": "https://api.stlouisfed.org/fred", "capabilities": ["macro"]},
-    "polymarket": {"label": "Polymarket", "base_url": "https://gamma-api.polymarket.com", "key_optional": True, "capabilities": ["macro", "prediction_markets"]},
-    "stocktwits": {"label": "StockTwits", "base_url": "https://api.stocktwits.com/api/2", "key_optional": True, "capabilities": ["sentiment"]},
-    "reddit": {"label": "Reddit public feeds", "key_optional": True, "capabilities": ["sentiment"]},
+    "polymarket": {"label": "Polymarket", "base_url": "https://gamma-api.polymarket.com", "key_optional": True, "auto_connect": True, "capabilities": ["macro", "prediction_markets"]},
+    "stocktwits": {"label": "StockTwits", "base_url": "https://api.stocktwits.com/api/2", "key_optional": True, "auto_connect": False, "availability_note": "Optional public feed. Its endpoint may block or rate-limit requests, so connect and verify it manually.", "capabilities": ["sentiment"]},
+    "reddit": {"label": "Reddit public feeds", "key_optional": True, "auto_connect": False, "availability_note": "Optional public feed. Reddit may reject anonymous requests, so connect and verify it manually.", "capabilities": ["sentiment"]},
 }
 
 PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
