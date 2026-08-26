@@ -53,6 +53,7 @@ export const createSample=()=>request<WorkflowRecord>('/workflows/sample',{metho
 export const validateWorkflow=(id:string)=>request<ValidationResult>(`/workflows/${id}/validate`,{method:'POST'});
 export const publishWorkflow=(id:string)=>request<{id:string}>(`/workflows/${id}/publish`,{method:'POST'});
 export const updateWorkflow=(id:string,definition:WorkflowRecord['definition'])=>request<WorkflowRecord>(`/workflows/${id}`,{method:'PUT',body:JSON.stringify(definition)});
+export const resetWorkflowDefault=(id:string)=>request<WorkflowRecord>(`/workflows/${id}/reset-default`,{method:'POST'});
 export const createRun=(workflow_version_id:string,ticker:string,as_of:string,configuration:RunConfiguration,budget_override:Budget)=>request<Run>('/runs',{method:'POST',body:JSON.stringify({workflow_version_id,ticker,as_of,configuration,budget_override})});
 export const listRuns=()=>request<Run[]>('/runs');
 export const getRun=(id:string)=>request<Run>(`/runs/${id}`);

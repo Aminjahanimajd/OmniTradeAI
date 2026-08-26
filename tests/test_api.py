@@ -1,11 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import httpx
 from fastapi.testclient import TestClient
 
-from omnitrade.api import _configured_definition, app
-from omnitrade.contracts import Run, RunConfiguration
+from omnitrade.api import _configured_definition, _recover_run_from_events, app
+from omnitrade.contracts import NodeRun, NodeStatus, Run, RunConfiguration, RunEvent, RunStatus
 from omnitrade.engine.catalog import NODE_CATALOG
 from omnitrade.sample_workflow import defense_workflow
 from omnitrade.storage import store
@@ -52,7 +52,7 @@ def test_complete_browser_api_scenario() -> None:
             headers=headers,
             json={
                 "workflow_version_id": version["id"],
-                "ticker": "AAPL",
+                "ticker": "MSFT",
                 "as_of": "2026-01-01T10:00:00Z",
                 "configuration": {"data_mode": "recorded"},
             },
@@ -65,11 +65,71 @@ def test_complete_browser_api_scenario() -> None:
         assert lineage["complete"] is True
         assert lineage["events"] > 30
         report = client.get(f"/api/v1/reports/{run_id}", headers=headers).json()
+        assert report["ticker"] == "MSFT"
         assert report["lineage_complete"] is True
         assert len(report["agent_analyses"]) == 4
         assert len(report["risk_analyses"]) == 3
         assert report["research_debate"]["bull_case"]["key_points"]
         assert report["workflow_summary"]["trace_id"]
+
+
+def test_workflow_draft_can_reset_without_replacing_published_version() -> None:
+    with TestClient(app) as client:
+        headers = auth(client)
+        workflow = client.post("/api/v1/workflows/sample", headers=headers).json()
+        version = client.post(
+            f"/api/v1/workflows/{workflow['id']}/publish", headers=headers
+        ).json()
+        changed = workflow["definition"]
+        changed["nodes"][0]["name"] = "Custom start"
+        changed["nodes"][0]["config"]["ui_color"] = "#123456"
+        assert client.put(
+            f"/api/v1/workflows/{workflow['id']}", headers=headers, json=changed
+        ).status_code == 200
+
+        reset = client.post(
+            f"/api/v1/workflows/{workflow['id']}/reset-default", headers=headers
+        ).json()
+
+        assert reset["definition"] == defense_workflow().model_dump(mode="json")
+        assert reset["published_version_id"] == version["id"]
+
+
+def test_completed_worker_events_recover_late_non_aapl_report() -> None:
+    run = Run(
+        workflow_version_id=uuid4(),
+        owner_id=uuid4(),
+        ticker="NVDA",
+        as_of=datetime.now(UTC),
+        status=RunStatus.INTERRUPTED,
+    )
+    started_at = datetime.now(UTC) - timedelta(seconds=240)
+    report_state = NodeRun(
+        run_id=run.id,
+        node_id="report",
+        status=NodeStatus.SUCCEEDED,
+        output={"ticker": "NVDA", "decision": {"action": "HOLD", "confidence": 0.6}},
+    )
+    events = [
+        RunEvent(event_type="run.started", run_id=run.id, trace_id=run.trace_id, occurred_at=started_at),
+        RunEvent(
+            event_type="run.checkpointed",
+            run_id=run.id,
+            trace_id=run.trace_id,
+            payload={"sequence": 1, "node_states": {"report": report_state.model_dump(mode="json")}},
+        ),
+        RunEvent(
+            event_type="run.completed",
+            run_id=run.id,
+            trace_id=run.trace_id,
+            payload={"status": "succeeded"},
+        ),
+    ]
+    store.save_run(run)
+
+    assert _recover_run_from_events(run, events) is True
+    assert store.runs[run.id].status == RunStatus.DEGRADED
+    assert store.run_results[run.id]["report"]["ticker"] == "NVDA"
 
 
 def test_catalog_suggestions_and_input_options_are_backend_contracts() -> None:

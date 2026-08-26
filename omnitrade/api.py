@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
@@ -240,6 +241,21 @@ def update_workflow(
         raise HTTPException(status_code=404, detail="Workflow not found") from exc
 
 
+@app.post("/api/v1/workflows/{workflow_id}/reset-default")
+def reset_workflow_default(
+    workflow_id: UUID, user: User = Depends(current_user)
+) -> dict[str, object]:
+    """Reset only the draft; published versions and old run reports stay unchanged."""
+
+    try:
+        store.get_workflow(workflow_id, user.id)
+        return _workflow_response(
+            store.update_workflow(workflow_id, user.id, defense_workflow())
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Workflow not found") from exc
+
+
 @app.delete("/api/v1/workflows/{workflow_id}", status_code=204)
 def delete_workflow(workflow_id: UUID, user: User = Depends(current_user)) -> Response:
     try:
@@ -325,13 +341,15 @@ def create_run(
 
 
 @app.get("/api/v1/runs")
-def list_runs(user: User = Depends(current_user)) -> list[dict[str, object]]:
+async def list_runs(user: User = Depends(current_user)) -> list[dict[str, object]]:
+    await _reconcile_completed_runs(user.id)
     return [run.model_dump(mode="json") for run in store.list_runs(user.id)]
 
 
 @app.get("/api/v1/runs/{run_id}")
-def get_run(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
+async def get_run(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
     run = _owned_run(run_id, user)
+    await _reconcile_completed_run(run.id)
     return run.model_dump(mode="json")
 
 
@@ -387,6 +405,7 @@ def run_events(run_id: UUID, user: User = Depends(current_user)) -> StreamingRes
                 RunStatus.DEGRADED,
                 RunStatus.FAILED,
                 RunStatus.CANCELLED,
+                RunStatus.INTERRUPTED,
             } and (redis_bus is not None or sent >= len(store.run_events[run_id])):
                 break
             await asyncio.sleep(0.1)
@@ -411,6 +430,7 @@ def lineage(run_id: UUID, user: User = Depends(current_user)) -> dict[str, objec
 @app.get("/api/v1/runs/{run_id}/activity")
 async def run_activity(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
     run = _owned_run(run_id, user)
+    await _reconcile_completed_run(run.id)
     events = store.run_events[run_id]
     if get_settings().env == "compose":
         events = [
@@ -426,8 +446,9 @@ async def run_activity(run_id: UUID, user: User = Depends(current_user)) -> dict
 
 
 @app.get("/api/v1/reports/{run_id}")
-def report(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
-    _owned_run(run_id, user)
+async def report(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
+    run = _owned_run(run_id, user)
+    await _reconcile_completed_run(run.id)
     result = store.run_results.get(run_id)
     if not result:
         raise HTTPException(status_code=409, detail="Report is not ready")
@@ -435,7 +456,8 @@ def report(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object
 
 
 @app.get("/api/v1/report-history")
-def list_reports(user: User = Depends(current_user)) -> list[dict[str, object]]:
+async def list_reports(user: User = Depends(current_user)) -> list[dict[str, object]]:
+    await _reconcile_completed_runs(user.id)
     reports: list[dict[str, object]] = []
     for run in store.list_runs(user.id):
         result = store.run_results.get(run.id)
@@ -459,8 +481,8 @@ def list_reports(user: User = Depends(current_user)) -> list[dict[str, object]]:
 
 
 @app.get("/api/v1/reports/{run_id}/export/{format}")
-def export_report(run_id: UUID, format: str, user: User = Depends(current_user)) -> Response:
-    data = report(run_id, user)
+async def export_report(run_id: UUID, format: str, user: User = Depends(current_user)) -> Response:
+    data = await report(run_id, user)
     if format == "json":
         return Response(json.dumps(data, indent=2, default=str), media_type="application/json")
     if format == "html":
@@ -482,8 +504,10 @@ async def _execute_run(run_id: UUID) -> None:
     definition = _configured_definition(version.definition, run)
     if get_settings().env == "compose":
         try:
+            # The workflow budget is a domain limit. The transport gets a grace
+            # period so a finished report is not discarded during final return.
             async with httpx.AsyncClient(
-                timeout=definition.budget.max_runtime_seconds + 10
+                timeout=definition.budget.max_runtime_seconds + 300
             ) as client:
                 response = await client.post(
                     "http://workflow:8001/internal/runs/execute",
@@ -497,13 +521,17 @@ async def _execute_run(run_id: UUID) -> None:
                 response.raise_for_status()
                 body = response.json()
         except httpx.HTTPError:
-            run.status = RunStatus.INTERRUPTED
-            store.save_run(run)
+            if not await _reconcile_completed_run(run_id):
+                run.status = RunStatus.INTERRUPTED
+                run.updated_at = datetime.now(UTC)
+                store.save_run(run)
             return
         updated = Run.model_validate(body["run"])
+        events = [RunEvent.model_validate(event_data) for event_data in body["events"]]
+        _apply_runtime_budget(updated, events, definition.budget.max_runtime_seconds)
         store.save_run(updated)
-        for event_data in body["events"]:
-            store.add_event(RunEvent.model_validate(event_data))
+        for event in events:
+            store.add_event(event)
         detailed_report = build_detailed_report(body["report"], body["nodes"], updated)
         store.save_result(run_id, {"nodes": body["nodes"], "report": detailed_report})
         return
@@ -556,6 +584,95 @@ async def _execute_run(run_id: UUID) -> None:
             "report": build_detailed_report(report_node or {}, node_data, result.run),
         },
     )
+
+
+async def _reconcile_completed_runs(owner_id: UUID) -> None:
+    if get_settings().env != "compose":
+        return
+    for run in store.list_runs(owner_id):
+        if run.status == RunStatus.INTERRUPTED and run.id not in store.run_results:
+            await _reconcile_completed_run(run.id)
+
+
+async def _reconcile_completed_run(run_id: UUID) -> bool:
+    """Recover a worker result that completed after the API transport timed out."""
+
+    run = store.runs.get(run_id)
+    if not run or run_id in store.run_results or get_settings().env != "compose":
+        return False
+    events = [
+        event async for event in RedisStreamEventBus(get_settings().redis_url).stream(run_id)
+    ]
+    return _recover_run_from_events(run, events)
+
+
+def _recover_run_from_events(run: Run, events: list[RunEvent]) -> bool:
+    completed = next(
+        (event for event in reversed(events) if event.event_type == "run.completed"),
+        None,
+    )
+    checkpoint_event = next(
+        (event for event in reversed(events) if event.event_type == "run.checkpointed"),
+        None,
+    )
+    if not completed or not checkpoint_event:
+        return False
+    raw_states = checkpoint_event.payload.get("node_states")
+    if not isinstance(raw_states, dict):
+        return False
+    states = {
+        node_id: NodeRun.model_validate(value) for node_id, value in raw_states.items()
+    }
+    report_state = states.get("report")
+    if (
+        not report_state
+        or report_state.status != NodeStatus.SUCCEEDED
+        or not isinstance(report_state.output, dict)
+    ):
+        return False
+
+    run.status = RunStatus(completed.payload.get("status", RunStatus.SUCCEEDED))
+    run.updated_at = completed.occurred_at
+    version = store.versions.get(run.workflow_version_id)
+    runtime_limit = (
+        run.budget_override.max_runtime_seconds
+        if run.budget_override
+        else version.definition.budget.max_runtime_seconds
+        if version
+        else 180
+    )
+    _apply_runtime_budget(run, events, runtime_limit)
+    node_data = {
+        node_id: state.model_dump(mode="json") for node_id, state in states.items()
+    }
+    store.save_run(run)
+    for event in events:
+        store.add_event(event)
+    store.save_result(
+        run.id,
+        {
+            "nodes": node_data,
+            "report": build_detailed_report(report_state.output, node_data, run),
+        },
+    )
+    return True
+
+
+def _apply_runtime_budget(run: Run, events: list[RunEvent], runtime_limit: int) -> None:
+    started = next((event for event in events if event.event_type == "run.started"), None)
+    completed = next(
+        (event for event in reversed(events) if event.event_type == "run.completed"),
+        None,
+    )
+    if not started or not completed:
+        return
+    elapsed = (completed.occurred_at - started.occurred_at).total_seconds()
+    if elapsed <= runtime_limit:
+        return
+    reason = f"Runtime budget exceeded: {elapsed:.1f}s used, {runtime_limit}s allowed"
+    if reason not in run.degraded_reasons:
+        run.degraded_reasons.append(reason)
+    run.status = RunStatus.DEGRADED
 
 
 async def _event_listener(event: RunEvent) -> None:

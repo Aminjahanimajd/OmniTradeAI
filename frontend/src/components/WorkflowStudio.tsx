@@ -3,7 +3,7 @@ import {
   addEdge, Background, Controls, MiniMap, ReactFlow, useEdgesState, useNodesState,
   type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
 } from '@xyflow/react';
-import { Alert, Box, Button, Card, Chip, CircularProgress, Divider, MenuItem, Select, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, Chip, CircularProgress, Divider, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PublishIcon from '@mui/icons-material/Publish';
 import SaveIcon from '@mui/icons-material/Save';
@@ -11,7 +11,10 @@ import VerifiedIcon from '@mui/icons-material/Verified';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-import { createSample, getCatalog, listWorkflows, publishWorkflow, updateWorkflow, validateWorkflow } from '../api';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PaletteIcon from '@mui/icons-material/Palette';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { createSample, getCatalog, listWorkflows, publishWorkflow, resetWorkflowDefault, updateWorkflow, validateWorkflow } from '../api';
 import type { CatalogSuggestion, ValidationResult, WorkflowRecord } from '../types';
 import { activeWorkflow } from '../workflows';
 
@@ -31,6 +34,8 @@ export default function WorkflowStudio() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [connectionAdvice, setConnectionAdvice] = useState('Select a node to see compatible next steps.');
+  const [nodeName, setNodeName] = useState('');
+  const [nodeColor, setNodeColor] = useState('#7c6cff');
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
   const history = useRef<Snapshot[]>([]);
@@ -73,6 +78,11 @@ export default function WorkflowStudio() {
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const selectedNodeType = String(selectedNode?.data.nodeType ?? '');
+  useEffect(() => {
+    if (!selectedNode) return;
+    setNodeName(String(selectedNode.data.label ?? ''));
+    setNodeColor(String(selectedNode.style?.background ?? '#7c6cff'));
+  }, [selectedNode]);
   const suggestions = useMemo(() => {
     const raw = catalog[selectedNodeType]?.suggested_targets ?? [];
     const unique = new Map<string, CatalogSuggestion>();
@@ -112,7 +122,7 @@ export default function WorkflowStudio() {
 
   function createNode(type: string, position?: { x: number; y: number }) {
     const id = `${type}-${crypto.randomUUID().slice(0, 8)}`;
-    const definition: RawNode = { id, type, name: type.replaceAll('_', ' '), config: defaultConfig(type), failure_policy: 'required', timeout_seconds: 30, retry: { max_attempts: 1, backoff_ms: 100 }, position: position ?? { x: 80 + nodes.length * 12, y: 80 + nodes.length * 8 } };
+    const definition: RawNode = { id, type, name: defaultNodeName(type), config: defaultConfig(type), failure_policy: 'required', timeout_seconds: 30, retry: { max_attempts: 1, backoff_ms: 100 }, position: position ?? { x: 80 + nodes.length * 12, y: 80 + nodes.length * 8 } };
     setNodes((current) => [...current, flowNode(definition, catalog[type]?.group ?? 'control')]);
     setValidation(undefined);
     return id;
@@ -127,12 +137,63 @@ export default function WorkflowStudio() {
     setSelectedNodeId(targetId);
   }
 
+  function applyNodeAppearance() {
+    if (!selectedNode || !nodeName.trim()) return;
+    remember();
+    setNodes((current) => current.map((node) => {
+      if (node.id !== selectedNode.id) return node;
+      const currentDefinition = node.data.definition as RawNode;
+      const definition = { ...currentDefinition, name: nodeName.trim(), config: { ...currentDefinition.config, ui_color: nodeColor } };
+      return { ...node, data: { ...node.data, label: definition.name, definition }, style: { ...node.style, background: nodeColor, color: readableText(nodeColor) } };
+    }));
+    setValidation(undefined);
+  }
+
+  function deleteSelectedNode() {
+    if (!selectedNode) return;
+    remember();
+    setNodes((current) => current.filter((node) => node.id !== selectedNode.id));
+    setEdges((current) => current.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id));
+    setSelectedNodeId(undefined);
+    setValidation(undefined);
+  }
+
+  function resetSelectedNode() {
+    if (!selectedNode) return;
+    const group = catalog[selectedNodeType]?.group ?? 'control';
+    const name = defaultNodeName(selectedNodeType);
+    const color = groupColors[group];
+    remember();
+    setNodes((current) => current.map((node) => {
+      if (node.id !== selectedNode.id) return node;
+      const currentDefinition = node.data.definition as RawNode;
+      const config = { ...currentDefinition.config };
+      delete config.ui_color;
+      const definition = { ...currentDefinition, name, config };
+      return { ...node, data: { ...node.data, label: name, definition }, style: { ...node.style, background: color, color: readableText(color) } };
+    }));
+    setNodeName(name);
+    setNodeColor(color);
+    setValidation(undefined);
+  }
+
+  async function resetGraph() {
+    if (!workflow || !window.confirm('Reset this draft to the complete default workflow? Published versions and old reports will stay unchanged.')) return;
+    setBusy(true); setError('');
+    try {
+      remember();
+      const updated = await resetWorkflowDefault(workflow.id);
+      const graph = toFlow(updated, catalog);
+      setWorkflow(updated); setNodes(graph.nodes); setEdges(graph.edges); setSelectedNodeId(undefined); setValidation(undefined);
+    } catch (reason) { setError(String(reason)); } finally { setBusy(false); }
+  }
+
   function definition() {
     if (!workflow) throw new Error('Workflow is not loaded');
     const original = workflow.definition as unknown as { nodes: RawNode[]; edges: RawEdge[] };
     return {
       ...workflow.definition,
-      nodes: nodes.map((node) => { const old = original.nodes.find((item) => item.id === node.id); return old ? { ...old, position: node.position } : { ...(node.data.definition as RawNode), position: node.position }; }),
+      nodes: nodes.map((node) => { const old = original.nodes.find((item) => item.id === node.id); const current = node.data.definition as RawNode; return { ...(old ?? current), ...current, name: String(node.data.label), position: node.position }; }),
       edges: edges.map((edge) => { const old = original.edges.find((item) => item.id === edge.id); return old ? { ...old, source: edge.source, target: edge.target, source_port: String(edge.data?.source_port ?? old.source_port), target_port: String(edge.data?.target_port ?? old.target_port) } : { id: edge.id, source: edge.source, target: edge.target, source_port: String(edge.data?.source_port), target_port: String(edge.data?.target_port), loop: Boolean(edge.data?.loop) }; }),
     };
   }
@@ -145,7 +206,7 @@ export default function WorkflowStudio() {
   return <Stack spacing={1.5}>
     <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ md: 'center' }} gap={1}>
       <Box><Typography variant="h4" fontWeight={800}>Advanced Workflow Lab</Typography><Typography color="text.secondary">Edit the real published workflow. Smart suggestions use the same port rules as the backend validator.</Typography></Box>
-      <Stack direction="row" spacing={1} flexWrap="wrap"><Button startIcon={<UndoIcon />} disabled={!history.current.length} onClick={undo}>Undo</Button><Button startIcon={<RedoIcon />} disabled={!future.current.length} onClick={redo}>Redo</Button><Button variant="outlined" startIcon={<SaveIcon />} onClick={save}>Save</Button><Button variant="outlined" startIcon={<VerifiedIcon />} onClick={validate}>Validate</Button><Button variant="contained" startIcon={<PublishIcon />} disabled={!validation?.valid} onClick={publish}>Publish</Button></Stack>
+      <Stack direction="row" spacing={1} flexWrap="wrap"><Button startIcon={<UndoIcon />} disabled={!history.current.length} onClick={undo}>Undo</Button><Button startIcon={<RedoIcon />} disabled={!future.current.length} onClick={redo}>Redo</Button><Button color="warning" startIcon={<RestartAltIcon />} onClick={resetGraph}>Reset graph</Button><Button variant="outlined" startIcon={<SaveIcon />} onClick={save}>Save</Button><Button variant="outlined" startIcon={<VerifiedIcon />} onClick={validate}>Validate</Button><Button variant="contained" startIcon={<PublishIcon />} disabled={!validation?.valid} onClick={publish}>Publish</Button></Stack>
     </Stack>
     <Alert severity="info">Draft edits affect analysis only after validation and publication. Every run executes its saved workflow version.</Alert>
     {error && <Alert severity="error">{error}</Alert>}
@@ -157,6 +218,15 @@ export default function WorkflowStudio() {
           <Stack direction="row" spacing={1} sx={{ my: 1.5 }}><Select size="small" fullWidth value={selectedType} onChange={(event) => setSelectedType(event.target.value)}>{Object.keys(catalog).sort().map((type) => <MenuItem key={type} value={type}>{type.replaceAll('_', ' ')}</MenuItem>)}</Select><Button variant="contained" aria-label="Add node" onClick={addNode}><AddIcon /></Button></Stack>
           <Divider sx={{ mb: 1.5 }} />
           {selectedNode ? <Stack spacing={1.2}>
+            <Typography fontWeight={900}>Selected node</Typography>
+            <TextField size="small" label="Node name" value={nodeName} inputProps={{ maxLength: 120 }} onChange={(event) => setNodeName(event.target.value)} />
+            <TextField size="small" type="color" label="Node color" value={nodeColor} onChange={(event) => setNodeColor(event.target.value)} InputLabelProps={{ shrink: true }} />
+            <Stack direction="row" flexWrap="wrap" gap={.7}>
+              <Button size="small" variant="contained" startIcon={<PaletteIcon />} disabled={!nodeName.trim()} onClick={applyNodeAppearance}>Apply name/color</Button>
+              <Button size="small" variant="outlined" startIcon={<RestartAltIcon />} onClick={resetSelectedNode}>Reset node</Button>
+              <Button size="small" color="error" variant="outlined" startIcon={<DeleteOutlineIcon />} onClick={deleteSelectedNode}>Delete</Button>
+            </Stack>
+            <Divider />
             <Stack direction="row" alignItems="center" gap={1}><AutoFixHighIcon color="secondary" /><Typography fontWeight={900}>Smart next nodes</Typography></Stack>
             <Typography variant="body2"><b>{String(selectedNode.data.label)}</b><br />Type: {selectedNodeType}</Typography>
             <Alert severity="info" icon={false}>
@@ -183,5 +253,7 @@ function toFlow(workflow: WorkflowRecord, catalog: Catalog): Snapshot {
     edges: raw.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, animated: true, data: { source_port: edge.source_port, target_port: edge.target_port, loop: edge.loop }, style: { stroke: '#8aa0c8' } })),
   };
 }
-function flowNode(definition: RawNode, group: string): Node { return { id: definition.id, position: definition.position, data: { label: definition.name, nodeType: definition.type, definition }, style: { background: groupColors[group], color: '#06101d', fontWeight: 800, width: 165, borderRadius: 12 } }; }
+function flowNode(definition: RawNode, group: string): Node { const background = typeof definition.config.ui_color === 'string' ? definition.config.ui_color : groupColors[group]; return { id: definition.id, position: definition.position, data: { label: definition.name, nodeType: definition.type, definition }, style: { background, color: readableText(background), fontWeight: 800, width: 165, borderRadius: 12 } }; }
 function defaultConfig(type: string): Record<string, unknown> { if (type === 'bounded_loop') return { max_iterations: 2 }; if (type === 'join') return { join_policy: 'required' }; if (type === 'time_guard') return { max_age_hours: 72 }; return {}; }
+function defaultNodeName(type: string): string { return type.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function readableText(color: string): string { const hex = color.replace('#', ''); if (!/^[0-9a-f]{6}$/i.test(hex)) return '#06101d'; const [red, green, blue] = [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16)); return (red * 299 + green * 587 + blue * 114) / 1000 > 145 ? '#06101d' : '#ffffff'; }

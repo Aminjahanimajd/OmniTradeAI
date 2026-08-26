@@ -64,7 +64,7 @@ only as study references; their workflow code was not copied or renamed.
 | New Analysis | Automatically use the latest published Workflow Lab graph, then select a stock, agents, verified providers, models, policy, and budgets. |
 | Agent Room | Follow real workflow events and read the output and impact of each agent. |
 | Reports | Browse saved reports by calendar, compare agent views, inspect evidence, and export PDF or JSON. |
-| Workflow Lab | Build, undo, validate, publish, and run typed workflow graphs with smart connection suggestions. |
+| Workflow Lab | Build, rename, recolor, delete, reset, undo, validate, publish, and run typed workflow graphs with smart connection suggestions. |
 | Profiles | Save default AI models plus horizon, experience, loss limit, position limit, and excluded sectors that change analysis and decision rules. |
 | Recovery | Cancel work or resume from checkpoints without repeating completed nodes. |
 
@@ -189,6 +189,11 @@ Replace all example credentials and secrets before any shared deployment.
 4. Open **Reports** to read every analyst, debate, risk, and manager view.
 5. Use **Workflow Lab** for advanced graph editing, then save, validate, and publish it.
 
+When two verified providers support the same data role, their controls become
+checkboxes. For example, Yahoo Finance and Alpha Vantage can both be selected
+for market, fundamental, news, or sentiment evidence. The ordered chain uses
+the next selected provider when the earlier provider fails.
+
 The normal Docker application accepts real providers only. Credentials are held
 in API memory for the current server session. They are never written to the
 database, run state, event stream, report, or exported artifact. Real provider
@@ -219,8 +224,15 @@ the position limit changes decision guidance, excluded sectors can block a
 `BUY` result, and experience level changes the detail of model explanations.
 
 Workflow Lab uses the same typed-port rules as the backend validator. Selecting
-a node shows its role and safe next-node suggestions. An invalid edge is blocked
-before it enters the draft.
+a node shows its role, name and color controls, delete/reset actions, and safe
+next-node suggestions. **Reset graph** restores the complete default draft but
+keeps all published versions and old reports. An invalid edge is blocked before
+it enters the draft.
+
+If a distributed worker finishes after the API transport limit, OmniTrade
+rebuilds the report from the final checkpoint and event stream. A result that
+exceeds the selected runtime budget is kept and marked `degraded` instead of
+being shown as interrupted with no report.
 
 ## API
 
@@ -236,6 +248,7 @@ POST   /api/v1/connections/{provider}/verify
 GET    /api/v1/workflows
 POST   /api/v1/workflows/{id}/validate
 POST   /api/v1/workflows/{id}/publish
+POST   /api/v1/workflows/{id}/reset-default
 POST   /api/v1/runs
 GET    /api/v1/runs/{id}
 POST   /api/v1/runs/{id}/cancel
@@ -275,9 +288,9 @@ pnpm exec playwright test
 CI uses deterministic models and recorded evidence. Live provider tests must be
 run separately. The workflow core has an 80% minimum coverage gate.
 
-Latest local verification: 34 backend tests and 4 frontend tests passed. The
+Latest local verification: 44 backend tests and 10 frontend tests passed. The
 workflow engine reached 89% test coverage, the production frontend built
-successfully, and Yahoo Finance passed a real connection check.
+successfully, and late-result recovery was verified with non-AAPL tickers.
 
 ## Project structure
 

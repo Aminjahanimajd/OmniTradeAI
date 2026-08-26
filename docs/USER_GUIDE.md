@@ -99,11 +99,14 @@ and Polymarket appear in Macro, not in Market or Fundamentals.
 ## 95–100: Customize the workflow
 
 1. Open **Workflow Lab**.
-2. Edit nodes or compatible edges.
-3. Use Undo if needed.
-4. Select **Save**, then **Validate**.
-5. Fix every validation error before publishing.
-6. Select **Publish**. The next New Analysis run uses the new version
+2. Select a node to read its role and compatible next nodes.
+3. Change its name or color and select **Apply name/color**.
+4. Use **Delete** to remove it or **Reset node** to restore its type name and group color. Ctrl+Z can undo these draft edits.
+5. Add or connect nodes with the smart suggestions.
+6. Use **Reset graph** only when you want the complete default draft. Published versions and old reports stay unchanged.
+7. Select **Save**, then **Validate**.
+8. Fix every validation error before publishing.
+9. Select **Publish**. The next New Analysis run uses the new version
    automatically.
 
 ## Troubleshooting

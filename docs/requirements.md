@@ -44,6 +44,8 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-31 | New Analysis automatically runs the latest published Workflow Lab graph and cannot select an unrelated workflow. | Shared active-workflow helper and graph-change scenario |
 | FR-32 | Data-chain controls show every verified provider in each supported role; HTTP 403/429 errors are explained safely, and failed optional public feeds are removed instead of left pending. | Connection catalog, API policy, provider map and unit tests |
 | FR-33 | Profile saves the default verified AI provider and quick/deep models; New Analysis permits a per-run change when alternatives exist. | Profile UI and adaptive-control tests |
+| FR-34 | A distributed run that completed after the API transport timeout is recovered from final events and checkpoints; its report remains available and a runtime-budget overrun is marked degraded. | Late non-AAPL recovery API test |
+| FR-35 | Workflow Lab lets a user rename, recolor, delete, and reset a node, or reset the whole draft, without replacing published versions or old reports. | Draft reset API test and Workflow Lab browser check |
 
 ## Quality requirements
 

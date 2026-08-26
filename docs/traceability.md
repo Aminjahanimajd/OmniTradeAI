@@ -18,6 +18,9 @@ FR-31 maps the shared active-workflow policy to Workflow Lab and New Analysis.
 FR-32 maps provider labels, capability roles, safe verification errors, and
 failed-public-feed cleanup to the catalog, Connections, and New Analysis. FR-33 maps saved Profile model defaults to the
 verified choices shown on New Analysis.
+FR-34 maps Redis terminal events and final checkpoints to API report recovery.
+FR-35 maps node appearance metadata and safe draft reset to Workflow Lab and the
+workflow reset endpoint.
 
 | Requirement | Components | Main verification |
 |---|---|---|
@@ -42,3 +45,5 @@ verified choices shown on New Analysis.
 | FR-31 | active workflow helper, Workflow Lab, New Analysis | unit test and two-run demo |
 | FR-32 | provider catalog, error policy, Connections, provider map and data chains | API and GUI unit tests |
 | FR-33 | Profile defaults, analysis options, New Analysis | frontend build and browser inspection |
+| FR-34 | terminal-event reconciliation, checkpoint report rebuild, runtime-budget degradation | `test_completed_worker_events_recover_late_non_aapl_report` |
+| FR-35 | Workflow Lab node controls, `ui_color` draft metadata, draft reset endpoint | `test_workflow_draft_can_reset_without_replacing_published_version`, browser check |

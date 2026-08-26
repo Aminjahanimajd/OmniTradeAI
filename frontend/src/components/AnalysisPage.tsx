@@ -19,7 +19,7 @@ const defaultConfig: RunConfiguration = {
   model_max_retries: 2, reasoning_effort: 'medium',
 };
 const defaultBudget: Budget = {
-  max_runtime_seconds: 180, max_model_calls: 30, max_provider_calls: 30,
+  max_runtime_seconds: 600, max_model_calls: 30, max_provider_calls: 30,
   max_tokens: 40000, max_parallel_nodes: 8,
 };
 const emptyOptions: AnalysisOptions = {
@@ -146,9 +146,9 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
               renderInput={params => <TextField {...params} label="Stock ticker" helperText="Only supported stock symbols are listed" />}
             />
             <TextField label="Analysis date" type="date" value={date} inputProps={{ max: new Date().toISOString().slice(0, 10) }} onChange={event => setDate(event.target.value)} InputLabelProps={{ shrink: true }} />
-            {options.data_modes.length > 1 ? <TextField select label="Data mode" value={config.data_mode} onChange={event => update('data_mode', event.target.value)}>
+            {options.data_modes.length > 1 && <TextField select label="Data mode" value={config.data_mode} onChange={event => update('data_mode', event.target.value)}>
               {options.data_modes.map(mode => <MenuItem value={mode} key={mode}>{mode === 'recorded' ? 'Recorded data - tests only' : 'Real provider data'}</MenuItem>)}
-            </TextField> : <Alert severity="success">Real verified data is always used. Test fixtures are not available here.</Alert>}
+            </TextField>}
             <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
               <Typography variant="subtitle2" fontWeight={800} gutterBottom>Verified provider map</Typography>
               <Typography variant="caption" color="text.secondary">A provider appears only in the chains supported by its real API.</Typography>
@@ -229,7 +229,6 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
           <Grid container spacing={1.5}>
             {([['max_runtime_seconds', 'Runtime seconds'], ['max_model_calls', 'Model calls'], ['max_provider_calls', 'Provider calls'], ['max_tokens', 'Token budget'], ['max_parallel_nodes', 'Parallel nodes']] as [keyof Budget, string][]).map(([key, label]) => <Grid item xs={6} key={key}><TextField fullWidth type="number" label={label} value={budget[key]} onChange={event => setBudget(current => ({ ...current, [key]: Number(event.target.value) }))} /></Grid>)}
           </Grid>
-          <Alert severity="info" sx={{ mt: 2 }}>No broker is connected. The output is decision support only.</Alert>
         </CardContent></Card>
       </Grid>
     </Grid>
