@@ -27,7 +27,7 @@ workflow reset endpoint.
 | FR-01 | auth API, ownership policy | `test_auth.py` |
 | FR-02-04 | workflow API, catalog, validator, editor | `test_validator.py`, GUI tests |
 | FR-05-06 | scheduler, join policy, event bus | `test_runtime.py` |
-| FR-07-08 | evidence adapters and quality gate | `test_evidence.py` |
+| FR-07-08 | evidence adapters, freshness filtering and runtime quality gate | `test_evidence.py`, `test_stale_optional_news_degrades_without_stopping_report`, strict-mode test |
 | FR-09-11 | model contracts, debate and risk graph | scenario integration test |
 | FR-12-13 | checkpoint store, cancellation, SSE | recovery and API tests |
 | FR-14-15 | lineage builder, report service, artifacts | report tests |

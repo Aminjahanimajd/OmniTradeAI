@@ -131,3 +131,49 @@ def test_failed_run_resumes_from_checkpoint_without_repeating_successes():
         assert completed_before.isdisjoint(restarted)
 
     asyncio.run(scenario())
+
+
+def test_stale_optional_news_degrades_without_stopping_report():
+    async def scenario():
+        graph = defense_workflow()
+        run = make_run()
+        executors = deterministic_executors()
+
+        async def stale_news(node, inputs, context):
+            output = await deterministic_executors()["fetch_news"](node, inputs, context)
+            output["observed_at"] = (run.as_of - timedelta(days=7)).isoformat()
+            return output
+
+        executors["fetch_news"] = stale_news
+        result = await WorkflowRuntime(executors).execute(graph, run)
+
+        assert result.run.status == RunStatus.DEGRADED
+        assert result.node_runs["time_guard"].status == NodeStatus.DEGRADED
+        assert result.node_runs["report"].status == NodeStatus.SUCCEEDED
+        assert any(
+            "fetch_news was excluded" in reason
+            for reason in result.run.degraded_reasons
+        )
+
+    asyncio.run(scenario())
+
+
+def test_stale_news_stays_fatal_when_degraded_mode_is_disabled():
+    async def scenario():
+        graph = defense_workflow()
+        run = make_run()
+        run.configuration.allow_degraded = False
+        executors = deterministic_executors()
+
+        async def stale_news(node, inputs, context):
+            output = await deterministic_executors()["fetch_news"](node, inputs, context)
+            output["observed_at"] = (run.as_of - timedelta(days=7)).isoformat()
+            return output
+
+        executors["fetch_news"] = stale_news
+        result = await WorkflowRuntime(executors).execute(graph, run)
+
+        assert result.run.status == RunStatus.FAILED
+        assert result.node_runs["time_guard"].status == NodeStatus.FAILED
+
+    asyncio.run(scenario())

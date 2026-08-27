@@ -45,8 +45,17 @@ async def deterministic_executor(
     if node.type == "join":
         return {"items": inputs.get("items", []), "joined": True}
     if node.type == "time_guard":
-        _validate_evidence_time(inputs, context.run.as_of, int(node.config["max_age_hours"]))
-        return {"items": inputs.get("items", inputs), "time_validated": True}
+        evidence, warnings = _guard_evidence_time(
+            inputs,
+            context.run.as_of,
+            int(node.config["max_age_hours"]),
+            context.run.configuration.allow_degraded,
+        )
+        return {
+            "items": evidence,
+            "time_validated": True,
+            "quality_warnings": warnings,
+        }
     if node.type == "parallel_split":
         return {"split": True}
     if node.type == "technical_indicators":
@@ -262,6 +271,37 @@ def _validate_evidence_time(value: Any, as_of: datetime, max_age_hours: int) -> 
             allowed_age = max(allowed_age, 24 * 14)
         if cutoff - timestamp > timedelta(hours=allowed_age):
             raise ValueError(f"{kind or 'Evidence'} is older than its {allowed_age}-hour freshness rule")
+
+
+def _guard_evidence_time(
+    inputs: dict[str, Any],
+    as_of: datetime,
+    max_age_hours: int,
+    allow_degraded: bool,
+) -> tuple[Any, list[str]]:
+    """Reject unsafe core evidence and omit stale optional text evidence."""
+
+    evidence = inputs.get("items", inputs)
+    if not isinstance(evidence, dict) or not isinstance(evidence.get("items"), list):
+        _validate_evidence_time(evidence, as_of, max_age_hours)
+        return evidence, []
+
+    kept: list[Any] = []
+    warnings: list[str] = []
+    degradable_kinds = {"fetch_news", "fetch_sentiment", "fetch_macro"}
+    for branch in evidence["items"]:
+        try:
+            _validate_evidence_time(branch, as_of, max_age_hours)
+        except ValueError as exc:
+            kind_item = _find_first(branch, "kind")
+            kind = str(kind_item.get("kind", "Evidence")) if kind_item else "Evidence"
+            stale = "older than" in str(exc)
+            if allow_degraded and stale and kind in degradable_kinds:
+                warnings.append(f"{kind} was excluded because it is stale")
+                continue
+            raise
+        kept.append(branch)
+    return {**evidence, "items": kept}, warnings
 
 
 def _technical_indicators(inputs: dict[str, Any]) -> dict[str, Any]:

@@ -234,6 +234,11 @@ rebuilds the report from the final checkpoint and event stream. A result that
 exceeds the selected runtime budget is kept and marked `degraded` instead of
 being shown as interrupted with no report.
 
+The time guard always rejects future evidence and stale core market or
+fundamental evidence. When **Allow degraded results** is enabled, stale news,
+sentiment, or macro branches are removed before analysis, recorded as quality
+warnings, and the remaining workflow continues to an auditable report.
+
 ## API
 
 The API is available at `http://localhost:8000`. Important routes include:
@@ -288,7 +293,7 @@ pnpm exec playwright test
 CI uses deterministic models and recorded evidence. Live provider tests must be
 run separately. The workflow core has an 80% minimum coverage gate.
 
-Latest local verification: 44 backend tests and 10 frontend tests passed. The
+Latest local verification: 46 backend tests and 10 frontend tests passed. The
 workflow engine reached 89% test coverage, the production frontend built
 successfully, and late-result recovery was verified with non-AAPL tickers.
 

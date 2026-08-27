@@ -235,6 +235,24 @@ class WorkflowRuntime:
                     state.output = await asyncio.wait_for(
                         executor(node, call_inputs, context), timeout=node.timeout_seconds
                     )
+                quality_warnings = (
+                    state.output.get("quality_warnings", [])
+                    if node.type == "time_guard" and isinstance(state.output, dict)
+                    else []
+                )
+                if quality_warnings:
+                    state.status = NodeStatus.DEGRADED
+                    for warning in quality_warnings:
+                        reason = f"{node.id}: {warning}"
+                        if reason not in context.run.degraded_reasons:
+                            context.run.degraded_reasons.append(reason)
+                    await self._emit(
+                        context.run,
+                        "node.degraded",
+                        node.id,
+                        {"warnings": quality_warnings},
+                    )
+                    return
                 state.status = NodeStatus.SUCCEEDED
                 await self._emit(context.run, "node.succeeded", node.id, {"attempt": attempt})
                 return

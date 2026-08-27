@@ -18,7 +18,7 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-05 | The engine schedules ready nodes in parallel and merges deterministically. | Scheduler tests and event trace |
 | FR-06 | Required and optional failures create failed or degraded outcomes. | Failure-policy tests |
 | FR-07 | Provider calls use bounded timeout, retry and only user-selected real-provider chains. | Adapter tests |
-| FR-08 | Evidence is normalized and checked for ticker, time, freshness, unit, currency and provenance. | Evidence tests |
+| FR-08 | Evidence is normalized and checked for ticker, time, freshness, unit, currency and provenance. Future, stale market, and stale fundamental evidence stop the run. With degraded mode enabled, stale news, sentiment, or macro branches are excluded and reported as quality warnings. | Evidence and degraded time-guard tests |
 | FR-09 | Four specialists produce schema-validated reports through a model gateway. | Contract tests |
 | FR-10 | Bull and bear research can repeat only within a declared iteration bound. | Loop tests |
 | FR-11 | Three risk views are evaluated and combined before decision validation. | Workflow integration test |
