@@ -50,7 +50,7 @@ It is the complete user-to-report workflow:
 - Bounded bull-versus-bear research loops.
 - Aggressive, balanced, and conservative risk reviews.
 - Time, model-call, provider-call, token, and parallelism budgets.
-- Validation, retries, fallback, cancellation, checkpoints, and safe resume.
+- Validation, retries, fallback, pause, cancellation, checkpoints, and safe resume.
 - Full traceability from each report section to runtime events and evidence.
 
 The project is implemented independently. Other trading-agent systems were used
@@ -63,10 +63,11 @@ only as study references; their workflow code was not copied or renamed.
 | Connections | Add private provider credentials, discover models, and verify each real connection before use. |
 | New Analysis | Automatically use the latest published Workflow Lab graph, then select a stock, agents, verified providers, models, policy, and budgets. |
 | Agent Room | Follow real workflow events and read the output and impact of each agent. |
+| Run History | Pause active runs and resume paused, failed, or interrupted runs from durable checkpoints. |
 | Reports | Browse saved reports by calendar, compare agent views, inspect evidence, and export PDF or JSON. |
 | Workflow Lab | Build, rename, recolor, delete, reset, undo, validate, publish, and run typed workflow graphs with smart connection suggestions. |
 | Profiles | Save default AI models plus horizon, experience, loss limit, position limit, and excluded sectors that change analysis and decision rules. |
-| Recovery | Cancel work or resume from checkpoints without repeating completed nodes. |
+| Recovery | Pause, cancel, or resume work from checkpoints without repeating completed nodes. |
 
 ## System workflow
 
@@ -256,6 +257,7 @@ POST   /api/v1/workflows/{id}/publish
 POST   /api/v1/workflows/{id}/reset-default
 POST   /api/v1/runs
 GET    /api/v1/runs/{id}
+POST   /api/v1/runs/{id}/pause
 POST   /api/v1/runs/{id}/cancel
 POST   /api/v1/runs/{id}/resume
 GET    /api/v1/runs/{id}/events
@@ -293,7 +295,7 @@ pnpm exec playwright test
 CI uses deterministic models and recorded evidence. Live provider tests must be
 run separately. The workflow core has an 80% minimum coverage gate.
 
-Latest local verification: 210 backend tests and 12 frontend tests passed. The
+Latest local verification: 212 backend tests and 15 frontend tests passed. The
 workflow engine reached 89% test coverage and the production frontend built
 successfully. The configuration matrix covers every research depth, analyst
 combination, risk profile, report level, reasoning level, supported language

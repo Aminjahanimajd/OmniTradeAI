@@ -7,7 +7,7 @@ or individual ownership.
 |---|---|
 | I1 | Docker Compose, React GUI, JWT login, public API, and browser path |
 | I2 | 31-node catalog, visual editing, CRUD, typed graph, validator, immutable publication |
-| I3 | Custom parallel scheduler, versioned events, SSE, Redis Streams, checkpoints, cancel and resume |
+| I3 | Custom parallel scheduler, versioned events, SSE, Redis Streams, durable checkpoints, safe pause, cancel and resume |
 | I4 | Recorded/live adapter boundary, fallback policy, evidence time gate, technical and fundamental formulas |
 | I5 | OpenAI-compatible gateway, deterministic fake model, typed output validation, four specialist nodes |
 | I6 | Bull/bear debate, bounded loop, proposal, three risk views, and decision validation |
@@ -16,7 +16,7 @@ or individual ownership.
 
 Verified on 27 August 2026:
 
-- 210 backend tests and 12 frontend tests passed.
+- 212 backend tests and 15 frontend tests passed.
 - Custom workflow core coverage: 89%.
 - Ruff and strict mypy passed.
 - Frontend unit test, TypeScript build, and production Vite build passed.
@@ -33,6 +33,9 @@ Verified on 27 August 2026:
 - The controlled failure scenario produced 126 events and resumed from
   checkpoint 12. Its final status was degraded because one optional social
   source failed as planned.
+- A live Compose control scenario paused at a checkpoint, resumed, paused a
+  second time, and ended as cancelled. Its event stream kept two pause requests,
+  two paused events, one resume request, and 11 checkpoints.
 
 Generated evidence is stored in `artifacts/defense/`. Future burndown, velocity,
 hours, authors, screenshots, and live-provider results must be added only when

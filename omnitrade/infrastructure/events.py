@@ -55,3 +55,12 @@ class RedisStreamEventBus:
 
     async def clear_cancel(self, run_id: UUID) -> None:
         await self.redis.delete(f"omnitrade:cancel:{run_id}")
+
+    async def request_pause(self, run_id: UUID) -> None:
+        await self.redis.set(f"omnitrade:pause:{run_id}", "1", ex=3600)
+
+    async def is_paused(self, run_id: UUID) -> bool:
+        return bool(await self.redis.exists(f"omnitrade:pause:{run_id}"))
+
+    async def clear_pause(self, run_id: UUID) -> None:
+        await self.redis.delete(f"omnitrade:pause:{run_id}")

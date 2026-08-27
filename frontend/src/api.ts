@@ -80,6 +80,7 @@ export const resetWorkflowDefault=(id:string)=>request<WorkflowRecord>(`/workflo
 export const createRun=(workflow_version_id:string,ticker:string,as_of:string,configuration:RunConfiguration,budget_override:Budget)=>request<Run>('/runs',{method:'POST',body:JSON.stringify({workflow_version_id,ticker,as_of,configuration,budget_override})});
 export const listRuns=()=>request<Run[]>('/runs');
 export const getRun=(id:string)=>request<Run>(`/runs/${id}`);
+export const pauseRun=(id:string)=>request<Run>(`/runs/${id}/pause`,{method:'POST'});
 export const cancelRun=(id:string)=>request<Run>(`/runs/${id}/cancel`,{method:'POST'});
 export const resumeRun=(id:string)=>request<Run>(`/runs/${id}/resume`,{method:'POST'});
 export const getLineage=(id:string)=>request<Record<string,unknown>>(`/runs/${id}/lineage`);

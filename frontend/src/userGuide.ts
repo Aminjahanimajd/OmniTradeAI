@@ -47,6 +47,8 @@ export const guideTopics: GuideTopic[] = [
     'Open Agent Room after starting the run.',
     'Follow evidence collection, normalization, specialist agents, debate, risk views, and manager decision.',
     'Check retries, degraded branches, or failures when a node does not finish.',
+    'Open Run History to pause an active run after its current node batch.',
+    'Use Resume from checkpoint for a paused, failed, or interrupted run. Reconnect old live providers first.',
   ] },
   { range: '85–95', title: 'Read the report', summary: 'Review the decision, evidence, and all agent views.', steps: [
     'Open Reports and select a date or saved run.',

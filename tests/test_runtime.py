@@ -133,6 +133,44 @@ def test_failed_run_resumes_from_checkpoint_without_repeating_successes():
     asyncio.run(scenario())
 
 
+def test_paused_run_resumes_without_repeating_completed_nodes():
+    async def scenario():
+        probes = 0
+
+        async def pause_after_first_batch(_run_id):
+            nonlocal probes
+            probes += 1
+            return probes > 1
+
+        graph = defense_workflow()
+        first = await WorkflowRuntime(
+            deterministic_executors(), pause_probe=pause_after_first_batch
+        ).execute(graph, make_run())
+        assert first.run.status == RunStatus.PAUSED
+        assert first.checkpoints
+        checkpoint = first.checkpoints[-1]
+        completed_before = {
+            node_id
+            for node_id, state in checkpoint.node_states.items()
+            if state.status in {NodeStatus.SUCCEEDED, NodeStatus.DEGRADED}
+        }
+        assert completed_before
+
+        second = await WorkflowRuntime(deterministic_executors()).execute(
+            graph, first.run, restored=checkpoint
+        )
+
+        assert second.run.status == RunStatus.SUCCEEDED
+        restarted = {
+            event.node_id
+            for event in second.events
+            if event.event_type == "node.started"
+        }
+        assert completed_before.isdisjoint(restarted)
+
+    asyncio.run(scenario())
+
+
 def test_stale_optional_news_degrades_without_stopping_report():
     async def scenario():
         graph = defense_workflow()

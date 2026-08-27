@@ -307,24 +307,12 @@ def create_run(
         investor_policy=store.get_profile(user.id).investor_policy.model_copy(deep=True),
         budget_override=request.budget_override,
     )
-    runtime_connections = connections.runtime_connections(user.id)
     if not get_settings().fixture_mode and request.configuration.data_mode == "recorded":
         raise HTTPException(
             status_code=422,
             detail="Recorded evidence is for automated tests only. Configure verified real providers.",
         )
-    if request.configuration.data_mode != "recorded":
-        selected_data = set(request.configuration.market_providers + request.configuration.fundamental_providers + request.configuration.news_providers + request.configuration.sentiment_providers + request.configuration.macro_providers)
-        missing = sorted(selected_data - runtime_connections.keys())
-        if missing:
-            raise HTTPException(status_code=422, detail=f"Verify the selected data connections first: {', '.join(missing)}")
-        if request.configuration.model_provider not in runtime_connections:
-            raise HTTPException(status_code=422, detail="Verify the selected model connection first")
-        selected_connection = runtime_connections[request.configuration.model_provider]
-        fallback_model = selected_connection.get("test_model")
-        allowed_models = connections.models(user.id, request.configuration.model_provider) or ([fallback_model] if fallback_model else [])
-        if request.configuration.quick_model not in allowed_models or request.configuration.deep_model not in allowed_models:
-            raise HTTPException(status_code=422, detail="The selected models do not belong to the verified provider connection")
+    _ensure_run_connections(run)
     configured = _configured_definition(version.definition, run)
     validation = WorkflowValidator().validate(configured)
     if not validation.valid:
@@ -353,25 +341,66 @@ async def get_run(run_id: UUID, user: User = Depends(current_user)) -> dict[str,
     return run.model_dump(mode="json")
 
 
-@app.post("/api/v1/runs/{run_id}/cancel")
+@app.post("/api/v1/runs/{run_id}/cancel", status_code=202)
 async def cancel_run(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
     run = _owned_run(run_id, user)
-    if run.status not in {RunStatus.QUEUED, RunStatus.RUNNING, RunStatus.DEGRADED}:
+    if run.status not in {
+        RunStatus.QUEUED,
+        RunStatus.RUNNING,
+        RunStatus.PAUSING,
+        RunStatus.PAUSED,
+    }:
         raise HTTPException(status_code=409, detail="Run cannot be cancelled in its current state")
+    if run.status == RunStatus.PAUSED:
+        run.status = RunStatus.CANCELLED
+        run.updated_at = datetime.now(UTC)
+        store.save_run(run)
+        await _record_control_event(run, "run.cancelled")
+        if get_settings().env == "compose":
+            await RedisStreamEventBus(get_settings().redis_url).clear_pause(run_id)
+        return run.model_dump(mode="json")
     run.status = RunStatus.CANCELLING
+    run.updated_at = datetime.now(UTC)
     store.save_run(run)
+    await _record_control_event(run, "run.cancel_requested")
     if get_settings().env == "compose":
         await RedisStreamEventBus(get_settings().redis_url).request_cancel(run_id)
     return run.model_dump(mode="json")
 
 
+@app.post("/api/v1/runs/{run_id}/pause", status_code=202)
+async def pause_run(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
+    run = _owned_run(run_id, user)
+    if run.status not in {RunStatus.QUEUED, RunStatus.RUNNING}:
+        raise HTTPException(status_code=409, detail="Only an active run can be paused")
+    run.status = RunStatus.PAUSING
+    run.updated_at = datetime.now(UTC)
+    store.save_run(run)
+    await _record_control_event(run, "run.pause_requested")
+    if get_settings().env == "compose":
+        await RedisStreamEventBus(get_settings().redis_url).request_pause(run_id)
+    return run.model_dump(mode="json")
+
+
 @app.post("/api/v1/runs/{run_id}/resume", status_code=202)
-def resume_run(
+async def resume_run(
     run_id: UUID, background: BackgroundTasks, user: User = Depends(current_user)
 ) -> dict[str, object]:
     run = _owned_run(run_id, user)
-    if run.status not in {RunStatus.INTERRUPTED, RunStatus.FAILED}:
-        raise HTTPException(status_code=409, detail="Only interrupted or failed runs can resume")
+    await _reconcile_completed_run(run.id)
+    if run.status not in {RunStatus.INTERRUPTED, RunStatus.FAILED, RunStatus.PAUSED}:
+        raise HTTPException(
+            status_code=409, detail="Only paused, interrupted, or failed runs can resume"
+        )
+    _ensure_run_connections(run)
+    if get_settings().env == "compose":
+        bus = RedisStreamEventBus(get_settings().redis_url)
+        await bus.clear_pause(run_id)
+        await bus.clear_cancel(run_id)
+    run.status = RunStatus.QUEUED
+    run.updated_at = datetime.now(UTC)
+    store.save_run(run)
+    await _record_control_event(run, "run.resume_requested")
     background.add_task(_execute_run, run.id)
     return run.model_dump(mode="json")
 
@@ -404,6 +433,7 @@ def run_events(run_id: UUID, user: User = Depends(current_user)) -> StreamingRes
                 RunStatus.SUCCEEDED,
                 RunStatus.DEGRADED,
                 RunStatus.FAILED,
+                RunStatus.PAUSED,
                 RunStatus.CANCELLED,
                 RunStatus.INTERRUPTED,
             } and (redis_bus is not None or sent >= len(store.run_events[run_id])):
@@ -416,13 +446,19 @@ def run_events(run_id: UUID, user: User = Depends(current_user)) -> StreamingRes
 
 
 @app.get("/api/v1/runs/{run_id}/lineage")
-def lineage(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
+async def lineage(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
     _owned_run(run_id, user)
     result = store.run_results.get(run_id, {})
+    nodes = result.get("nodes", {})
+    events = store.run_events[run_id]
+    if get_settings().env == "compose":
+        events = await _combined_run_events(run_id)
+    if not nodes:
+        nodes = _nodes_from_events(events)
     return {
         "run_id": run_id,
-        "nodes": result.get("nodes", {}),
-        "events": len(store.run_events[run_id]),
+        "nodes": nodes,
+        "events": len(events),
         "complete": bool(result),
     }
 
@@ -431,13 +467,10 @@ def lineage(run_id: UUID, user: User = Depends(current_user)) -> dict[str, objec
 async def run_activity(run_id: UUID, user: User = Depends(current_user)) -> dict[str, object]:
     run = _owned_run(run_id, user)
     await _reconcile_completed_run(run.id)
-    events = store.run_events[run_id]
-    if get_settings().env == "compose":
-        events = [
-            event
-            async for event in RedisStreamEventBus(get_settings().redis_url).stream(run_id)
-        ]
+    events = await _combined_run_events(run_id)
     nodes = store.run_results.get(run_id, {}).get("nodes", {})
+    if not nodes:
+        nodes = _nodes_from_events(events)
     return {
         "run": run.model_dump(mode="json"),
         "events": [event.model_dump(mode="json") for event in events],
@@ -499,6 +532,10 @@ async def export_report(run_id: UUID, format: str, user: User = Depends(current_
 
 async def _execute_run(run_id: UUID) -> None:
     run = store.runs[run_id]
+    if run.status == RunStatus.QUEUED:
+        run.status = RunStatus.RUNNING
+        run.updated_at = datetime.now(UTC)
+        store.save_run(run)
     version = store.versions[run.workflow_version_id]
     checkpoint = await _latest_checkpoint(run_id)
     definition = _configured_definition(version.definition, run)
@@ -532,6 +569,8 @@ async def _execute_run(run_id: UUID) -> None:
         store.save_run(updated)
         for event in events:
             store.add_event(event)
+        if updated.status == RunStatus.PAUSED:
+            return
         detailed_report = build_detailed_report(body["report"], body["nodes"], updated)
         store.save_result(run_id, {"nodes": body["nodes"], "report": detailed_report})
         return
@@ -562,6 +601,7 @@ async def _execute_run(run_id: UUID) -> None:
         local_executors,
         listener=_event_listener,
         cancellation_probe=_local_cancellation_probe,
+        pause_probe=_local_pause_probe,
         connections=connections.runtime_connections(run.owner_id),
     )
     result = await runtime.execute(definition, run, restored=checkpoint)
@@ -577,6 +617,8 @@ async def _execute_run(run_id: UUID) -> None:
     node_data = {
         key: value.model_dump(mode="json") for key, value in result.node_runs.items()
     }
+    if result.run.status == RunStatus.PAUSED:
+        return
     store.save_result(
         run.id,
         {
@@ -600,9 +642,9 @@ async def _reconcile_completed_run(run_id: UUID) -> bool:
     run = store.runs.get(run_id)
     if not run or run_id in store.run_results or get_settings().env != "compose":
         return False
-    events = [
-        event async for event in RedisStreamEventBus(get_settings().redis_url).stream(run_id)
-    ]
+    events = await _combined_run_events(run_id)
+    for event in events:
+        store.add_event(event)
     return _recover_run_from_events(run, events)
 
 
@@ -679,17 +721,81 @@ async def _event_listener(event: RunEvent) -> None:
     store.add_event(event)
 
 
+async def _record_control_event(run: Run, event_type: str) -> None:
+    """Write user control commands to durable history and the live event stream."""
+
+    event = RunEvent(
+        event_type=event_type,
+        run_id=run.id,
+        trace_id=run.trace_id,
+        payload={"status": run.status},
+    )
+    store.add_event(event)
+    if get_settings().env == "compose":
+        await RedisStreamEventBus(get_settings().redis_url).publish(event)
+
+
+def _ensure_run_connections(run: Run) -> None:
+    """Recheck session-only credentials before a new or resumed live run."""
+
+    if run.configuration.data_mode == "recorded":
+        return
+    available = connections.runtime_connections(run.owner_id)
+    selected_data = set(
+        run.configuration.market_providers
+        + run.configuration.fundamental_providers
+        + run.configuration.news_providers
+        + run.configuration.sentiment_providers
+        + run.configuration.macro_providers
+    )
+    missing = sorted(selected_data - available.keys())
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Reconnect and verify the data providers required by this run: "
+                + ", ".join(missing)
+            ),
+        )
+    provider = run.configuration.model_provider
+    if provider not in available:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Reconnect and verify the model provider required by this run: {provider}",
+        )
+    fallback_model = available[provider].get("test_model")
+    allowed_models = connections.models(run.owner_id, provider) or (
+        [fallback_model] if fallback_model else []
+    )
+    selected_models = {run.configuration.quick_model, run.configuration.deep_model}
+    if not selected_models.issubset(allowed_models):
+        raise HTTPException(
+            status_code=422,
+            detail="Reconnect the model provider and load the models saved by this run",
+        )
+
+
+def _nodes_from_events(events: list[RunEvent]) -> dict[str, object]:
+    checkpoint = next(
+        (event for event in reversed(events) if event.event_type == "run.checkpointed"),
+        None,
+    )
+    if not checkpoint:
+        return {}
+    states = checkpoint.payload.get("node_states", {})
+    return cast(dict[str, object], states) if isinstance(states, dict) else {}
+
+
 async def _local_cancellation_probe(run_id: UUID) -> bool:
     return store.runs[run_id].status == RunStatus.CANCELLING
 
 
+async def _local_pause_probe(run_id: UUID) -> bool:
+    return store.runs[run_id].status == RunStatus.PAUSING
+
+
 async def _latest_checkpoint(run_id: UUID) -> Checkpoint | None:
-    if get_settings().env == "compose":
-        events = [
-            event async for event in RedisStreamEventBus(get_settings().redis_url).stream(run_id)
-        ]
-    else:
-        events = store.run_events[run_id]
+    events = await _combined_run_events(run_id)
     candidates = [event for event in events if event.event_type == "run.checkpointed"]
     if not candidates:
         return None
@@ -713,6 +819,19 @@ async def _latest_checkpoint(run_id: UUID) -> Checkpoint | None:
         sequence=int(event.payload["sequence"]),
         node_states=states,
     )
+
+
+async def _combined_run_events(run_id: UUID) -> list[RunEvent]:
+    """Merge durable database history with the current Redis stream."""
+
+    by_id = {event.event_id: event for event in store.run_events[run_id]}
+    if get_settings().env == "compose":
+        redis_events = [
+            event
+            async for event in RedisStreamEventBus(get_settings().redis_url).stream(run_id)
+        ]
+        by_id.update({event.event_id: event for event in redis_events})
+    return sorted(by_id.values(), key=lambda event: event.occurred_at)
 
 
 def _owned_run(run_id: UUID, user: User) -> Run:

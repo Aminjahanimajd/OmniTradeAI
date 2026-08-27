@@ -132,6 +132,52 @@ def test_completed_worker_events_recover_late_non_aapl_report() -> None:
     assert store.run_results[run.id]["report"]["ticker"] == "NVDA"
 
 
+def test_pause_and_old_run_resume_are_exposed_by_api(monkeypatch) -> None:
+    async def do_not_execute(_run_id):
+        return None
+
+    monkeypatch.setattr("omnitrade.api._execute_run", do_not_execute)
+    with TestClient(app) as client:
+        headers = auth(client)
+        workflow = client.post("/api/v1/workflows/sample", headers=headers).json()
+        version = client.post(
+            f"/api/v1/workflows/{workflow['id']}/publish", headers=headers
+        ).json()
+        owner_id = next(
+            value["owner_id"]
+            for value in store.workflows.values()
+            if str(value["id"]) == workflow["id"]
+        )
+        active = Run(
+            workflow_version_id=version["id"],
+            owner_id=owner_id,
+            ticker="AMD",
+            as_of=datetime.now(UTC),
+            status=RunStatus.RUNNING,
+            configuration=RunConfiguration(data_mode="recorded"),
+        )
+        store.save_run(active)
+
+        paused = client.post(f"/api/v1/runs/{active.id}/pause", headers=headers)
+        assert paused.status_code == 202
+        assert paused.json()["status"] == "pausing"
+        assert any(
+            event.event_type == "run.pause_requested"
+            for event in store.run_events[active.id]
+        )
+
+        active.status = RunStatus.PAUSED
+        active.created_at = datetime.now(UTC) - timedelta(days=4)
+        store.save_run(active)
+        resumed = client.post(f"/api/v1/runs/{active.id}/resume", headers=headers)
+        assert resumed.status_code == 202
+        assert resumed.json()["status"] == "queued"
+        assert any(
+            event.event_type == "run.resume_requested"
+            for event in store.run_events[active.id]
+        )
+
+
 def test_catalog_suggestions_and_input_options_are_backend_contracts() -> None:
     with TestClient(app) as client:
         headers = auth(client)

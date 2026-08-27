@@ -41,6 +41,8 @@ class RunStatus(StrEnum):
     DEGRADED = "degraded"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    PAUSING = "pausing"
+    PAUSED = "paused"
     CANCELLING = "cancelling"
     CANCELLED = "cancelled"
     INTERRUPTED = "interrupted"

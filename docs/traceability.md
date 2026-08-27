@@ -29,7 +29,7 @@ workflow reset endpoint.
 | FR-05-06 | scheduler, join policy, event bus | `test_runtime.py` |
 | FR-07-08 | evidence adapters, freshness filtering and runtime quality gate | `test_evidence.py`, `test_stale_optional_news_degrades_without_stopping_report`, strict-mode test |
 | FR-09-11 | model contracts, debate and risk graph | scenario integration test |
-| FR-12-13 | checkpoint store, cancellation, SSE | recovery and API tests |
+| FR-12-13 | checkpoint store, pause/resume/cancel controls, Run History, SSE | runtime recovery, API control, and GUI tests |
 | FR-14-15 | lineage builder, report service, artifacts | report tests |
 | FR-16-19 | analysis form, Agent Room, profiles, reports, Workflow Lab | API and GUI scenarios |
 | FR-20 | runtime node outputs, detailed report builder, report GUI/PDF | `test_reporting.py`, API scenario |

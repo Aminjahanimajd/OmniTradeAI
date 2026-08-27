@@ -86,6 +86,12 @@ and Polymarket appear in Macro, not in Market or Fundamentals.
 3. Read each specialist agent output.
 4. Follow the bull and bear debate, risk views, and manager decision.
 5. Check retries, degraded branches, and failures when a node does not finish.
+6. Open **Run History** to pause an active run. The current parallel node batch
+   finishes before the checkpoint is saved.
+7. Select **Resume from checkpoint** for a paused, failed, or interrupted run.
+   Completed nodes do not run again. For an old live run, reconnect its saved
+   data and AI providers first.
+8. Use **Cancel** only when the run should not continue.
 
 ## 85–95: Read and export the report
 
@@ -115,3 +121,5 @@ and Polymarket appear in Macro, not in Market or Fundamentals.
 - Alpha Vantage missing: enter a valid Alpha Vantage API key and verify it.
 - Expired login: sign in again.
 - No report: open Agent Room and inspect the failed or running node.
+- Cannot resume an old run: reconnect and verify the providers named in the
+  error, then try **Resume from checkpoint** again.

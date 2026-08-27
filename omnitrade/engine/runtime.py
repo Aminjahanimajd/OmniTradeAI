@@ -24,6 +24,7 @@ from omnitrade.engine.validator import WorkflowValidator
 NodeExecutor = Callable[[NodeDefinition, dict[str, Any], "ExecutionContext"], Awaitable[Any]]
 EventListener = Callable[[RunEvent], Awaitable[None]]
 CancellationProbe = Callable[[UUID], Awaitable[bool]]
+PauseProbe = Callable[[UUID], Awaitable[bool]]
 
 
 class ExecutionError(RuntimeError):
@@ -69,11 +70,13 @@ class WorkflowRuntime:
         executors: dict[str, NodeExecutor],
         listener: EventListener | None = None,
         cancellation_probe: CancellationProbe | None = None,
+        pause_probe: PauseProbe | None = None,
         connections: dict[str, dict[str, str]] | None = None,
     ):
         self.executors = executors
         self.listener = listener
         self.cancellation_probe = cancellation_probe
+        self.pause_probe = pause_probe
         self.connections = connections or {}
         self._events: list[RunEvent] = []
         self._checkpoints: list[Checkpoint] = []
@@ -115,6 +118,9 @@ class WorkflowRuntime:
                     context.cancelled.set()
                 if context.cancelled.is_set():
                     await self._cancel(run, states)
+                    break
+                if self.pause_probe and await self.pause_probe(run.id):
+                    await self._pause(run, states)
                     break
                 ready = self._ready_nodes(nodes, incoming, states)
                 if not ready:
@@ -334,6 +340,13 @@ class WorkflowRuntime:
             if state.status not in self._terminal_node_states():
                 state.status = NodeStatus.CANCELLED
         await self._emit(run, "run.cancelled")
+
+    async def _pause(self, run: Run, states: dict[str, NodeRun]) -> None:
+        """Stop only between node batches, after saving durable progress."""
+
+        await self._checkpoint(run, states)
+        run.status = RunStatus.PAUSED
+        await self._emit(run, "run.paused")
 
     async def _emit(
         self,

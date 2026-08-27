@@ -37,18 +37,27 @@ Recorded providers and deterministic models are isolated test seams used by CI.
 stateDiagram-v2
   [*] --> queued
   queued --> running
-  running --> degraded: optional branch fails
-  degraded --> succeeded: report completes
+  running --> degraded: report completes with optional warnings
   running --> succeeded
   running --> cancelling
   cancelling --> cancelled
+  running --> pausing: user requests safe pause
+  pausing --> paused: current batch ends and checkpoint is saved
   running --> failed: required branch or budget fails
   running --> interrupted: worker crash
-  interrupted --> running: idempotent resume
+  paused --> queued: resume from checkpoint
+  failed --> queued: retry unfinished nodes
+  interrupted --> queued: recover after interruption
+  paused --> cancelled: final cancellation
   succeeded --> [*]
-  failed --> [*]
+  degraded --> [*]
   cancelled --> [*]
 ```
+
+A pause is cooperative. The engine finishes the active parallel node batch,
+saves all node states, and then stops. Resume keeps successful or degraded
+nodes and resets only unfinished nodes. Runs remain durable for later days, but
+session-only credentials must be reconnected before an old live run resumes.
 
 ## Event rules
 

@@ -42,6 +42,7 @@ pretrained model is not called complex by itself.
 | Global budget control | Coordinates runtime, parallelism, provider calls, model calls, and token use across the graph |
 | Event and idempotency protocol | Uses versioned IDs, traces, consumer-safe events, and duplicate protection |
 | Checkpoint resume | Restores successful nodes, resets incomplete nodes, and avoids repeated completed work |
+| Cooperative pause | Finishes the current parallel batch, saves a durable checkpoint, and exposes the paused state for later continuation |
 | Cancellation coordination | Sends cancellation through Redis and stops pending workflow work safely |
 | Evidence time and quality gate | Prevents wrong ticker, stale, future, untrusted, unit-less, or currency-mismatched evidence |
 | Claim lineage | Preserves the node, provider, content hash, and event path behind the report |
@@ -50,4 +51,3 @@ The proposal is balanced because useful storage functions and third-party tools
 support the product, while the main behavior is controlled by our own workflow
 logic. None of the complex rows depends on calling a feature complex only
 because it uses AI.
-

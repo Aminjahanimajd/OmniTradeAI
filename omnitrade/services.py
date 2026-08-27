@@ -312,6 +312,7 @@ async def workflow_execute(task: WorkflowTask) -> WorkflowResult:
         distributed_executors(),
         listener=bus.publish,
         cancellation_probe=bus.is_cancelled,
+        pause_probe=bus.is_paused,
         connections=task.connections,
     )
     result = await runtime.execute(task.workflow, task.run, restored=task.checkpoint)

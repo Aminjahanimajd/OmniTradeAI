@@ -22,7 +22,7 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-09 | Four specialists produce schema-validated reports through a model gateway. | Contract tests |
 | FR-10 | Bull and bear research can repeat only within a declared iteration bound. | Loop tests |
 | FR-11 | Three risk views are evaluated and combined before decision validation. | Workflow integration test |
-| FR-12 | Users can cancel and resume safely from checkpoints without duplicated effects. | Recovery tests |
+| FR-12 | Users can safely pause active runs and resume paused, failed, or interrupted runs from durable checkpoints without duplicated completed work. Cancel remains final. | Runtime recovery and API control tests |
 | FR-13 | Run events are available by SSE with reconnect support. | API/SSE tests |
 | FR-14 | Every report claim links to evidence and provider metadata. | Lineage completeness test |
 | FR-15 | Reports can be exported as JSON, HTML and PDF artifacts with hashes. | Export tests |
