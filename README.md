@@ -293,9 +293,17 @@ pnpm exec playwright test
 CI uses deterministic models and recorded evidence. Live provider tests must be
 run separately. The workflow core has an 80% minimum coverage gate.
 
-Latest local verification: 46 backend tests and 10 frontend tests passed. The
-workflow engine reached 89% test coverage, the production frontend built
-successfully, and late-result recovery was verified with non-AAPL tickers.
+Latest local verification: 210 backend tests and 12 frontend tests passed. The
+workflow engine reached 89% test coverage and the production frontend built
+successfully. The configuration matrix covers every research depth, analyst
+combination, risk profile, report level, reasoning level, supported language
+and currency, temperature, retry count, and provider-chain contract.
+
+A live AMD run also completed all 34 nodes with Amazon Bedrock and real data.
+It used aggressive risk, detailed output, EUR conversion, high reasoning,
+temperature 0.2, three retries, and four bounded debate rounds. Currency
+conversion uses the current Frankfurter API and records the real FX rate in
+evidence lineage.
 
 ## Project structure
 

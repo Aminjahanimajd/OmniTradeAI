@@ -19,7 +19,7 @@ const defaultConfig: RunConfiguration = {
   model_max_retries: 2, reasoning_effort: 'medium',
 };
 const defaultBudget: Budget = {
-  max_runtime_seconds: 600, max_model_calls: 30, max_provider_calls: 30,
+  max_runtime_seconds: 900, max_model_calls: 30, max_provider_calls: 30,
   max_tokens: 40000, max_parallel_nodes: 8,
 };
 const emptyOptions: AnalysisOptions = {
@@ -85,7 +85,7 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
           macro_providers: chain(profile.default_configuration.macro_providers, 'macro'),
         });
       })
-      .catch(error => setMessage(String(error)));
+      .catch(error => setMessage(error instanceof Error ? error.message : String(error)));
   }, []);
 
   const update = <K extends keyof RunConfiguration>(key: K, value: RunConfiguration[K]) =>
@@ -120,7 +120,7 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
       );
       onCreated(run.id);
     } catch (error) {
-      setMessage(String(error));
+      setMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
@@ -209,7 +209,7 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
             </>}
             <TextField select label="Reasoning effort" value={config.reasoning_effort} onChange={event=>update('reasoning_effort',event.target.value)}><MenuItem value="low">Low</MenuItem><MenuItem value="medium">Medium</MenuItem><MenuItem value="high">High</MenuItem></TextField>
             <TextField type="number" label="Temperature (empty uses provider default)" value={config.temperature??''} inputProps={{min:0,max:2,step:0.1}} onChange={event=>update('temperature',event.target.value===''?null:Number(event.target.value))}/>
-            <TextField type="number" label="Model retries" value={config.model_max_retries} inputProps={{min:0,max:5}} onChange={event=>update('model_max_retries',Number(event.target.value))}/>
+            <TextField type="number" label="Model retries" value={config.model_max_retries} inputProps={{min:0,max:5,step:1}} onChange={event=>update('model_max_retries',Math.max(0,Math.min(5,Number(event.target.value))))}/>
             <TextField select label="Report detail" value={config.report_detail} onChange={event => update('report_detail', event.target.value)}>
               <MenuItem value="summary">Summary</MenuItem><MenuItem value="standard">Standard</MenuItem><MenuItem value="detailed">Detailed</MenuItem>
             </TextField>
@@ -219,7 +219,7 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
             <TextField select label="Base currency" value={config.base_currency} onChange={event => update('base_currency', event.target.value)}>
               {options.currencies.map(currency => <MenuItem value={currency} key={currency}>{currency}</MenuItem>)}
             </TextField>
-            <TextField type="number" label="Evidence freshness (hours)" value={config.evidence_freshness_hours} onChange={event => update('evidence_freshness_hours', Number(event.target.value))} />
+            <TextField type="number" label="Evidence freshness (hours)" value={config.evidence_freshness_hours} inputProps={{min:1,max:720,step:1}} onChange={event => update('evidence_freshness_hours', Math.max(1,Math.min(720,Number(event.target.value))))} />
           </Stack>
         </CardContent></Card>
       </Grid>
@@ -227,7 +227,7 @@ export default function AnalysisPage({ onCreated }: { onCreated: (id: string) =>
         <Card><CardContent>
           <Typography variant="h6" fontWeight={800} gutterBottom>4. Safety budgets</Typography>
           <Grid container spacing={1.5}>
-            {([['max_runtime_seconds', 'Runtime seconds'], ['max_model_calls', 'Model calls'], ['max_provider_calls', 'Provider calls'], ['max_tokens', 'Token budget'], ['max_parallel_nodes', 'Parallel nodes']] as [keyof Budget, string][]).map(([key, label]) => <Grid item xs={6} key={key}><TextField fullWidth type="number" label={label} value={budget[key]} onChange={event => setBudget(current => ({ ...current, [key]: Number(event.target.value) }))} /></Grid>)}
+            {([['max_runtime_seconds', 'Runtime seconds', 10, 1800], ['max_model_calls', 'Model calls', 0, 100], ['max_provider_calls', 'Provider calls', 0, 200], ['max_tokens', 'Token budget', 0, 1000000], ['max_parallel_nodes', 'Parallel nodes', 1, 32]] as [keyof Budget, string, number, number][]).map(([key, label, min, max]) => <Grid item xs={6} key={key}><TextField fullWidth type="number" label={label} value={budget[key]} inputProps={{min,max,step:1}} onChange={event => setBudget(current => ({ ...current, [key]: Math.max(min,Math.min(max,Number(event.target.value))) }))} /></Grid>)}
           </Grid>
         </CardContent></Card>
       </Grid>

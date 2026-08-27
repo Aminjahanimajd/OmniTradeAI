@@ -14,14 +14,16 @@ or individual ownership.
 | I7 | PostgreSQL service schemas, ownership tests, report history, node lineage, JSON/HTML/PDF export |
 | I8 | Failure scenario, worker-crash simulation, restart recovery, CI, Docker deployment, generated sequence diagram |
 
-Verified on 9 August 2026:
+Verified on 27 August 2026:
 
-- 22 backend tests passed.
-- Custom workflow core coverage: 90%.
+- 210 backend tests and 12 frontend tests passed.
+- Custom workflow core coverage: 89%.
 - Ruff and strict mypy passed.
 - Frontend unit test, TypeScript build, and production Vite build passed.
 - Playwright browser scenario passed.
 - Eight Compose containers started; PostgreSQL and Redis were healthy.
+- A live AMD run completed all 34 nodes using Bedrock, real provider data,
+  EUR conversion, and four debate rounds with no failed event.
 - A distributed AAPL fixture run completed with 120 Redis events, complete
   lineage, and a 1,856-byte PDF export.
 - The same run and its 120 events were available after restarting the API

@@ -727,6 +727,11 @@ def _configured_definition(definition: WorkflowDefinition, run: Run) -> Workflow
     if run.budget_override:
         configured.budget = run.budget_override
     for node in configured.nodes:
+        if node.type.startswith("fetch_"):
+            # Real provider fallback is controlled by the selected provider
+            # chain. Old workflow drafts may still contain a fixture fallback,
+            # which must never be used or shown for a live run.
+            node.retry.fallback_provider = None
         if NODE_CATALOG[node.type].model_cost:
             retry_timeout = 100 * (run.configuration.model_max_retries + 1)
             node.timeout_seconds = max(node.timeout_seconds, min(300, retry_timeout))

@@ -47,3 +47,5 @@ workflow reset endpoint.
 | FR-33 | Profile defaults, analysis options, New Analysis | frontend build and browser inspection |
 | FR-34 | terminal-event reconciliation, checkpoint report rebuild, runtime-budget degradation | `test_completed_worker_events_recover_late_non_aapl_report` |
 | FR-35 | Workflow Lab node controls, `ui_color` draft metadata, draft reset endpoint | `test_workflow_draft_can_reset_without_replacing_published_version`, browser check |
+| FR-36 | run configuration contract, configured graph validator, readable API errors | `test_configuration_matrix.py` and GUI tests |
+| FR-37 | Frankfurter FX adapter, evidence hashes and currency metadata | provider unit test and live AMD report |

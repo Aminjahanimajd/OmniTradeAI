@@ -19,9 +19,32 @@ function clearSession(notify:boolean):void{
   if(notify)window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 }
 
+export function formatApiErrorDetail(detail:unknown):string{
+  if(typeof detail==='string')return detail;
+  if(Array.isArray(detail))return detail.map(item=>formatApiErrorDetail(item)).filter(Boolean).join('; ');
+  if(detail&&typeof detail==='object'){
+    const value=detail as Record<string,unknown>;
+    if(typeof value.msg==='string'){
+      const location=Array.isArray(value.loc)?value.loc.filter(part=>part!=='body').join(' › '):'';
+      return location?`${location}: ${value.msg}`:value.msg;
+    }
+    const message=typeof value.message==='string'?value.message:'';
+    const validation=value.validation&&typeof value.validation==='object'
+      ?(value.validation as Record<string,unknown>).errors:undefined;
+    const validationText=validation?formatApiErrorDetail(validation):'';
+    if(message&&validationText)return `${message}: ${validationText}`;
+    if(message)return message;
+    try{return JSON.stringify(detail)}catch{return 'Request failed'}
+  }
+  return detail==null?'Request failed':String(detail);
+}
+
 async function errorMessage(response:Response):Promise<string>{
   const text=await response.text();
-  try{return JSON.parse(text).detail??text??`Request failed: ${response.status}`}catch{return text||`Request failed: ${response.status}`}
+  try{
+    const body=JSON.parse(text) as {detail?:unknown};
+    return formatApiErrorDetail(body.detail??body);
+  }catch{return text||`Request failed: ${response.status}`}
 }
 
 async function request<T>(path:string,options:RequestInit={}):Promise<T>{

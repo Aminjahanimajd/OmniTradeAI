@@ -46,6 +46,8 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-33 | Profile saves the default verified AI provider and quick/deep models; New Analysis permits a per-run change when alternatives exist. | Profile UI and adaptive-control tests |
 | FR-34 | A distributed run that completed after the API transport timeout is recovered from final events and checkpoints; its report remains available and a runtime-budget overrun is marked degraded. | Late non-AAPL recovery API test |
 | FR-35 | Workflow Lab lets a user rename, recolor, delete, and reset a node, or reset the whole draft, without replacing published versions or old reports. | Draft reset API test and Workflow Lab browser check |
+| FR-36 | Every offered New Analysis setting forms a valid workflow contract; invalid manual budgets return a readable field or graph error before queueing. | Configuration matrix and frontend error-format tests |
+| FR-37 | Non-USD market and fundamental values use a real historical FX rate, with source, rate, and original currency kept in lineage. | Provider conversion and live-run tests |
 
 ## Quality requirements
 

@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from omnitrade.config import get_settings
@@ -28,7 +28,7 @@ from omnitrade.model_gateway import (
     build_model_client,
     extract_json_object,
 )
-from omnitrade.providers import convert_evidence_currency, fetch_from_chain
+from omnitrade.providers import ProviderError, convert_evidence_currency, fetch_from_chain
 
 
 class NodeTask(BaseModel):
@@ -143,7 +143,10 @@ async def evidence_execute(task: NodeTask) -> NodeResult:
     group = NODE_CATALOG[task.node.type].group
     if group not in {"evidence", "normalization", "calculation"}:
         raise ValueError(f"Evidence service cannot execute {group} nodes")
-    return await execute_task(task)
+    try:
+        return await execute_task(task)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @model_app.post("/internal/nodes/execute", response_model=NodeResult)
@@ -268,7 +271,14 @@ def remote_executor(url: str) -> NodeExecutor:
                 url,
                 json=NodeTask(node=node, inputs=inputs, run=context.run, connections=scoped).model_dump(mode="json"),
             )
-            response.raise_for_status()
+            if not response.is_success:
+                try:
+                    detail = response.json().get("detail")
+                except (ValueError, AttributeError):
+                    detail = None
+                raise RuntimeError(
+                    str(detail) if detail else f"{spec.group} service returned HTTP {response.status_code}"
+                )
             return NodeResult.model_validate(response.json()).output
 
     return execute

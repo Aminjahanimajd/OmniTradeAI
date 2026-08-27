@@ -235,15 +235,9 @@ class WorkflowValidator:
             * node.retry.max_attempts
             for node in workflow.nodes
         )
-        loop_factor = max(
-            (
-                node.config.get("max_iterations", 1)
-                for node in workflow.nodes
-                if node.type == "bounded_loop"
-            ),
-            default=1,
-        )
-        model_calls *= loop_factor
+        # The runtime repeats only the bounded-loop control node. It does not
+        # rerun every model node, so multiplying the full graph by the research
+        # depth rejects valid configurations and overstates the real cost.
         if model_calls > workflow.budget.max_model_calls:
             errors.append(
                 ValidationIssue(

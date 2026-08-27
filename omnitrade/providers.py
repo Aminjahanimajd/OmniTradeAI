@@ -388,7 +388,11 @@ async def fetch_from_chain(node_type: str, ticker: str, as_of: datetime, provide
             output["provider_chain"] = provider_names
             output["providers_failed_before_success"] = errors
             return output
-        except (httpx.HTTPError, ProviderError, ValueError) as exc:
+        except httpx.HTTPStatusError as exc:
+            errors.append(f"{name}: HTTP {exc.response.status_code}")
+        except httpx.RequestError:
+            errors.append(f"{name}: connection error")
+        except (ProviderError, ValueError) as exc:
             errors.append(f"{name}: {exc}")
     raise ProviderError("All selected real providers failed: " + "; ".join(errors))
 
@@ -397,9 +401,17 @@ async def convert_evidence_currency(payload: dict[str, Any], target: str, as_of:
     source = str(payload.get("currency") or "USD")
     if source == target or payload.get("kind") not in {"fetch_market", "fetch_fundamentals"}:
         return payload
-    async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(f"https://api.frankfurter.app/{as_of.date().isoformat()}", params={"from": source, "to": target})
-        response.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            response = await client.get(
+                f"https://api.frankfurter.dev/v1/{as_of.date().isoformat()}",
+                params={"base": source, "symbols": target},
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise ProviderError(f"FX service returned HTTP {exc.response.status_code}") from exc
+    except httpx.RequestError as exc:
+        raise ProviderError("FX service is unavailable") from exc
     rate = float(response.json().get("rates", {}).get(target, 0))
     if rate <= 0:
         raise ProviderError(f"No real FX rate was returned for {source}/{target}")

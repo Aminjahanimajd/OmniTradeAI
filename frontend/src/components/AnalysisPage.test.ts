@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { optionControlMode, providerRoles } from './AnalysisPage';
 import { activeWorkflow } from '../workflows';
 import type { WorkflowRecord } from '../types';
+import { formatApiErrorDetail } from '../api';
 
 function workflow(id: string, name: string, version: number): WorkflowRecord {
   return {
@@ -46,5 +47,19 @@ describe('optionControlMode', () => {
     expect(roles.find(item => item.name === 'fred')?.capabilities).toEqual(['macro']);
     expect(roles.find(item => item.name === 'polymarket')?.capabilities).toContain('macro');
     expect(roles.find(item => item.name === 'yfinance')?.capabilities).not.toContain('macro');
+  });
+});
+
+describe('API error messages', () => {
+  it('shows workflow validation details instead of object text', () => {
+    expect(formatApiErrorDetail({
+      message: 'Run settings make this workflow invalid',
+      validation: { errors: [{ code: 'MODEL_BUDGET', message: 'Graph needs 12 model calls' }] },
+    })).toBe('Run settings make this workflow invalid: Graph needs 12 model calls');
+  });
+
+  it('shows FastAPI field errors with their location', () => {
+    expect(formatApiErrorDetail([{ loc: ['body', 'configuration', 'research_depth'], msg: 'Input should be less than or equal to 5' }]))
+      .toBe('configuration › research_depth: Input should be less than or equal to 5');
   });
 });
