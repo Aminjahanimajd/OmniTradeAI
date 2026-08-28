@@ -90,7 +90,9 @@ def build_detailed_report(
                 }
             )
 
-    statuses = [str(item.get("status", "unknown")) for item in nodes.values() if isinstance(item, dict)]
+    statuses = [
+        str(item.get("status", "unknown")) for item in nodes.values() if isinstance(item, dict)
+    ]
     report.update(
         {
             "agent_analyses": analyst_views,
@@ -104,7 +106,9 @@ def build_detailed_report(
                 "agreement": manager.get("agreement", "Mixed evidence"),
             },
             "trading_proposal": {
-                "action": proposal.get("action", report.get("decision", {}).get("action", "NO_DECISION")),
+                "action": proposal.get(
+                    "action", report.get("decision", {}).get("action", "NO_DECISION")
+                ),
                 "confidence": proposal.get("confidence", 0),
                 "summary": proposal.get("summary", "No proposal summary was produced."),
                 "conditions": proposal.get("conditions", []),
@@ -140,6 +144,7 @@ def _case(output: dict[str, Any], fallback: str) -> dict[str, Any]:
         "agent": output.get("agent", "Research Agent"),
         "stance": output.get("stance", output.get("viewpoint", "NEUTRAL")),
         "summary": output.get("summary", fallback),
+        "support": output.get("strength", output.get("confidence", 0)),
         "confidence": output.get("confidence", 0),
         "key_points": output.get("key_points", []),
         "counterpoints": output.get("risks_or_counters", []),
@@ -173,10 +178,50 @@ def render_pdf(report: dict[str, Any]) -> bytes:
         title="OmniTrade AI decision-support report",
     )
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="CoverTitle", parent=styles["Title"], fontSize=25, leading=30, textColor=colors.HexColor("#17233D"), alignment=TA_CENTER, spaceAfter=12))
-    styles.add(ParagraphStyle(name="Section", parent=styles["Heading1"], fontSize=16, leading=20, textColor=colors.HexColor("#3F39A8"), spaceBefore=12, spaceAfter=8, keepWithNext=True))
-    styles.add(ParagraphStyle(name="Agent", parent=styles["Heading2"], fontSize=12, leading=15, textColor=colors.HexColor("#17233D"), spaceBefore=7, spaceAfter=4, keepWithNext=True))
-    styles.add(ParagraphStyle(name="Small", parent=styles["BodyText"], fontSize=8.5, leading=11, textColor=colors.HexColor("#536078")))
+    styles.add(
+        ParagraphStyle(
+            name="CoverTitle",
+            parent=styles["Title"],
+            fontSize=25,
+            leading=30,
+            textColor=colors.HexColor("#17233D"),
+            alignment=TA_CENTER,
+            spaceAfter=12,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="Section",
+            parent=styles["Heading1"],
+            fontSize=16,
+            leading=20,
+            textColor=colors.HexColor("#3F39A8"),
+            spaceBefore=12,
+            spaceAfter=8,
+            keepWithNext=True,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="Agent",
+            parent=styles["Heading2"],
+            fontSize=12,
+            leading=15,
+            textColor=colors.HexColor("#17233D"),
+            spaceBefore=7,
+            spaceAfter=4,
+            keepWithNext=True,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="Small",
+            parent=styles["BodyText"],
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.HexColor("#536078"),
+        )
+    )
     story: list[Any] = []
     decision = report.get("decision", {})
     story.extend(
@@ -187,13 +232,21 @@ def render_pdf(report: dict[str, Any]) -> bytes:
             Spacer(1, 8 * mm),
             _summary_table(report, decision),
             Spacer(1, 8 * mm),
-            Paragraph(_safe(report.get("executive_summary", "No executive summary.")), styles["BodyText"]),
+            Paragraph(
+                _safe(report.get("executive_summary", "No executive summary.")), styles["BodyText"]
+            ),
             Spacer(1, 4 * mm),
             Paragraph("Decision support only. No broker order is created.", styles["Small"]),
             PageBreak(),
             Paragraph("1. Final Decision", styles["Section"]),
-            Paragraph(f"<b>Action:</b> {_safe(decision.get('action', 'NO_DECISION'))} &nbsp;&nbsp; <b>Confidence:</b> {_percent(decision.get('confidence', 0))}", styles["BodyText"]),
-            Paragraph(f"<b>Rationale:</b> {_safe(decision.get('rationale', 'No rationale.'))}", styles["BodyText"]),
+            Paragraph(
+                f"<b>Action:</b> {_safe(decision.get('action', 'NO_DECISION'))} &nbsp;&nbsp; <b>Confidence:</b> {_percent(decision.get('confidence', 0))}",
+                styles["BodyText"],
+            ),
+            Paragraph(
+                f"<b>Rationale:</b> {_safe(decision.get('rationale', 'No rationale.'))}",
+                styles["BodyText"],
+            ),
             _bullet_block("Key factors", decision.get("key_factors", []), styles),
             Paragraph("2. Specialist Analyst Views", styles["Section"]),
         ]
@@ -202,71 +255,191 @@ def render_pdf(report: dict[str, Any]) -> bytes:
         story.extend(_agent_block(agent, styles))
 
     debate = report.get("research_debate", {})
-    story.extend([Paragraph("3. Bull and Bear Research Debate", styles["Section"]), _case_block("Bull Researcher", debate.get("bull_case", {}), colors.HexColor("#E8F7ED"), styles), _case_block("Bear Researcher", debate.get("bear_case", {}), colors.HexColor("#FCEBEC"), styles), Paragraph(f"<b>Research Manager:</b> {_safe(debate.get('manager_conclusion', 'No conclusion.'))}", styles["BodyText"])])
+    story.extend(
+        [
+            Paragraph("3. Bull and Bear Research Debate", styles["Section"]),
+            _case_block(
+                "Bull Researcher", debate.get("bull_case", {}), colors.HexColor("#E8F7ED"), styles
+            ),
+            _case_block(
+                "Bear Researcher", debate.get("bear_case", {}), colors.HexColor("#FCEBEC"), styles
+            ),
+            Paragraph(
+                f"<b>Research Manager:</b> {_safe(debate.get('manager_conclusion', 'No conclusion.'))}",
+                styles["BodyText"],
+            ),
+        ]
+    )
 
     proposal = report.get("trading_proposal", {})
-    story.extend([Paragraph("4. Trading Proposal", styles["Section"]), Paragraph(f"<b>{_safe(proposal.get('action', 'NO_DECISION'))}</b> ({_percent(proposal.get('confidence', 0))}) - {_safe(proposal.get('summary', 'No summary.'))}", styles["BodyText"]), _bullet_block("Conditions", proposal.get("conditions", []), styles), Paragraph("5. Risk Team Views", styles["Section"])])
+    story.extend(
+        [
+            Paragraph("4. Trading Proposal", styles["Section"]),
+            Paragraph(
+                f"<b>{_safe(proposal.get('action', 'NO_DECISION'))}</b> ({_percent(proposal.get('confidence', 0))}) - {_safe(proposal.get('summary', 'No summary.'))}",
+                styles["BodyText"],
+            ),
+            _bullet_block("Conditions", proposal.get("conditions", []), styles),
+            Paragraph("5. Risk Team Views", styles["Section"]),
+        ]
+    )
     for risk in report.get("risk_analyses", []):
         story.extend(_risk_block(risk, styles))
 
-    story.extend([Paragraph("6. Evidence and Traceability", styles["Section"]), _evidence_table(report.get("evidence_overview", []), styles), Paragraph("7. Analysis Settings", styles["Section"]), _settings_table(report.get("analysis_settings", {}), styles), Spacer(1, 5 * mm), Paragraph(_safe(report.get("disclaimer", "Financial decision support only.")), styles["Small"])])
+    story.extend(
+        [
+            Paragraph("6. Evidence and Traceability", styles["Section"]),
+            _evidence_table(report.get("evidence_overview", []), styles),
+            Paragraph("7. Analysis Settings", styles["Section"]),
+            _settings_table(report.get("analysis_settings", {}), styles),
+            Spacer(1, 5 * mm),
+            Paragraph(
+                _safe(report.get("disclaimer", "Financial decision support only.")), styles["Small"]
+            ),
+        ]
+    )
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return buffer.getvalue()
 
 
 def _summary_table(report: dict[str, Any], decision: dict[str, Any]) -> Table:
-    data = [["Ticker", _safe(report.get("ticker", "-")), "As of", _safe(report.get("as_of", "-"))], ["Decision", _safe(decision.get("action", "NO_DECISION")), "Confidence", _percent(decision.get("confidence", 0))]]
+    data = [
+        ["Ticker", _safe(report.get("ticker", "-")), "As of", _safe(report.get("as_of", "-"))],
+        [
+            "Decision",
+            _safe(decision.get("action", "NO_DECISION")),
+            "Confidence",
+            _percent(decision.get("confidence", 0)),
+        ],
+    ]
     table = Table(data, colWidths=[28 * mm, 48 * mm, 28 * mm, 60 * mm])
-    table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F3F5FA")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#17233D")), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("GRID", (0, 0), (-1, -1), .5, colors.HexColor("#D8DEEA")), ("PADDING", (0, 0), (-1, -1), 7)]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F3F5FA")),
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#17233D")),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D8DEEA")),
+                ("PADDING", (0, 0), (-1, -1), 7),
+            ]
+        )
+    )
     return table
 
 
 def _agent_block(agent: dict[str, Any], styles: Any) -> list[Any]:
-    content: list[Any] = [Paragraph(f"{_safe(agent.get('agent', 'Analyst'))} - {_safe(agent.get('viewpoint', 'NEUTRAL'))} ({_percent(agent.get('confidence', 0))})", styles["Agent"]), Paragraph(_safe(agent.get("summary", "No summary.")), styles["BodyText"]), _bullet_block("Key points", agent.get("key_points", []), styles), _bullet_block("Risks", agent.get("risks", []), styles)]
+    content: list[Any] = [
+        Paragraph(
+            f"{_safe(agent.get('agent', 'Analyst'))} - {_safe(agent.get('viewpoint', 'NEUTRAL'))} ({_percent(agent.get('confidence', 0))})",
+            styles["Agent"],
+        ),
+        Paragraph(_safe(agent.get("summary", "No summary.")), styles["BodyText"]),
+        _bullet_block("Key points", agent.get("key_points", []), styles),
+        _bullet_block("Risks", agent.get("risks", []), styles),
+    ]
     return content
 
 
 def _case_block(title: str, case: dict[str, Any], background: colors.Color, styles: Any) -> Table:
-    body = [Paragraph(f"<b>{_safe(title)}</b> - {_percent(case.get('confidence', 0))}", styles["BodyText"]), Paragraph(_safe(case.get("summary", "No summary.")), styles["BodyText"])]
+    support = case.get("support", case.get("confidence", 0))
+    body = [
+        Paragraph(
+            f"<b>{_safe(title)}</b> - Support: {_percent(support)} | Evidence confidence: {_percent(case.get('confidence', 0))}",
+            styles["BodyText"],
+        ),
+        Paragraph(_safe(case.get("summary", "No summary.")), styles["BodyText"]),
+    ]
     for item in case.get("key_points", []):
         body.append(Paragraph(f"- {_safe(item)}", styles["Small"]))
     table = Table([[body]], colWidths=[164 * mm])
-    table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), background), ("BOX", (0, 0), (-1, -1), .7, colors.HexColor("#CBD4E2")), ("PADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), background),
+                ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#CBD4E2")),
+                ("PADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
     return table
 
 
 def _risk_block(risk: dict[str, Any], styles: Any) -> list[Any]:
-    return [Paragraph(f"{_safe(risk.get('agent', 'Risk Analyst'))} - {_safe(risk.get('stance', 'NEUTRAL'))} ({_percent(risk.get('confidence', 0))})", styles["Agent"]), Paragraph(_safe(risk.get("summary", "No summary.")), styles["BodyText"]), Paragraph(f"<b>Impact on decision:</b> {_safe(risk.get('impact', 'No impact statement.'))}", styles["Small"])]
+    return [
+        Paragraph(
+            f"{_safe(risk.get('agent', 'Risk Analyst'))} - {_safe(risk.get('stance', 'NEUTRAL'))} ({_percent(risk.get('confidence', 0))})",
+            styles["Agent"],
+        ),
+        Paragraph(_safe(risk.get("summary", "No summary.")), styles["BodyText"]),
+        Paragraph(
+            f"<b>Impact on decision:</b> {_safe(risk.get('impact', 'No impact statement.'))}",
+            styles["Small"],
+        ),
+    ]
 
 
 def _bullet_block(title: str, values: Any, styles: Any) -> Any:
     items = values if isinstance(values, list) else []
     if not items:
         return Spacer(1, 1)
-    return KeepTogether([Paragraph(f"<b>{_safe(title)}:</b>", styles["Small"]), *[Paragraph(f"- {_safe(item)}", styles["Small"]) for item in items]])
+    return KeepTogether(
+        [
+            Paragraph(f"<b>{_safe(title)}:</b>", styles["Small"]),
+            *[Paragraph(f"- {_safe(item)}", styles["Small"]) for item in items],
+        ]
+    )
 
 
 def _evidence_table(items: list[dict[str, Any]], styles: Any) -> Table:
     data: list[list[Any]] = [["Source", "Status", "Evidence summary", "Content hash"]]
     for item in items:
         hashes = item.get("content_hashes", [])
-        data.append([_safe(item.get("source", "-")), _safe(item.get("status", "-")), Paragraph(_safe(item.get("summary", "-")), styles["Small"]), Paragraph(_safe(hashes[0] if hashes else "-")[:18] + "...", styles["Small"])])
+        data.append(
+            [
+                _safe(item.get("source", "-")),
+                _safe(item.get("status", "-")),
+                Paragraph(_safe(item.get("summary", "-")), styles["Small"]),
+                Paragraph(_safe(hashes[0] if hashes else "-")[:18] + "...", styles["Small"]),
+            ]
+        )
     table = Table(data, colWidths=[25 * mm, 38 * mm, 55 * mm, 46 * mm], repeatRows=1)
     table.setStyle(_table_style())
     return table
 
 
 def _settings_table(settings: dict[str, Any], styles: Any) -> Table:
-    data = [[Paragraph(f"<b>{_safe(key.replace('_', ' ').title())}</b>", styles["Small"]), Paragraph(_safe(", ".join(value) if isinstance(value, list) else value), styles["Small"])] for key, value in settings.items()]
+    data = [
+        [
+            Paragraph(f"<b>{_safe(key.replace('_', ' ').title())}</b>", styles["Small"]),
+            Paragraph(
+                _safe(", ".join(value) if isinstance(value, list) else value), styles["Small"]
+            ),
+        ]
+        for key, value in settings.items()
+    ]
     table = Table(data or [["Settings", "Unavailable"]], colWidths=[58 * mm, 106 * mm])
     table.setStyle(_table_style(header=False))
     return table
 
 
 def _table_style(header: bool = True) -> TableStyle:
-    commands: list[tuple[Any, ...]] = [("GRID", (0, 0), (-1, -1), .4, colors.HexColor("#D8DEEA")), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5), ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]
+    commands: list[tuple[Any, ...]] = [
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D8DEEA")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]
     if header:
-        commands.extend([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#3F39A8")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white), ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")])
+        commands.extend(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#3F39A8")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ]
+        )
     return TableStyle(commands)
 
 

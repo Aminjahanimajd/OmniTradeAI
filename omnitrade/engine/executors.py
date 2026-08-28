@@ -41,7 +41,11 @@ async def deterministic_executor(
         return fixture_provider_payload(node.type, context.run.ticker, context.run.as_of)
     if node.type.startswith("normalize_"):
         raw = inputs.get("raw", inputs)
-        return {**raw, "normalized": True} if isinstance(raw, dict) else {"data": raw, "normalized": True}
+        return (
+            {**raw, "normalized": True}
+            if isinstance(raw, dict)
+            else {"data": raw, "normalized": True}
+        )
     if node.type == "join":
         return {"items": inputs.get("items", []), "joined": True}
     if node.type == "time_guard":
@@ -84,7 +88,9 @@ async def deterministic_executor(
             "round": round_number,
             "cases": inputs.get("cases", inputs),
             "stopped": round_number >= int(node.config["max_iterations"]),
-            "termination_reason": "configured debate bound reached" if round_number >= int(node.config["max_iterations"]) else "another bounded comparison is allowed",
+            "termination_reason": "configured debate bound reached"
+            if round_number >= int(node.config["max_iterations"])
+            else "another bounded comparison is allowed",
         }
     if node.type == "proposal_builder":
         bull_score = _position_score(inputs, "bull")
@@ -96,14 +102,21 @@ async def deterministic_executor(
             "signal_score": round(net_score, 4),
             "confidence": round(min(0.92, 0.55 + abs(net_score - 0.5)), 4),
             "summary": f"The research evidence produces a {action} proposal with a combined signal of {net_score:.2f}.",
-            "conditions": ["Reassess when prices, filings, or material news change.", "Do not treat this decision-support output as guaranteed performance."],
+            "conditions": [
+                "Reassess when prices, filings, or material news change.",
+                "Do not treat this decision-support output as guaranteed performance.",
+            ],
             "basis": inputs,
         }
     if node.type.endswith("_risk"):
         risk_profile = node.type.removesuffix("_risk")
         proposal = _find_first(inputs, "signal_score") or {}
         signal = float(proposal.get("signal_score", 0.5))
-        thresholds = {"aggressive": (0.58, 0.42), "balanced": (0.62, 0.38), "conservative": (0.68, 0.32)}
+        thresholds = {
+            "aggressive": (0.58, 0.42),
+            "balanced": (0.62, 0.38),
+            "conservative": (0.68, 0.32),
+        }
         buy_at, sell_at = thresholds[risk_profile]
         policy = context.run.investor_policy
         if policy.maximum_loss_percent < 8:
@@ -146,8 +159,17 @@ async def deterministic_executor(
             "confidence": round(float(proposal.get("confidence", 0.5)), 4),
             "signal_score": round(signal, 4),
             "rationale": f"The {selected} user policy {'blocks the sector' if sector_blocked else 'accepts' if action == proposed_action else 'limits'} for the {proposed_action} proposal produced from live evidence.",
-            "key_factors": [f"combined signal {signal:.2f}", f"selected risk policy {selected}", f"maximum position {context.run.investor_policy.maximum_position_percent:.0f}%", "bounded bull-bear research"],
-            "warnings": ["Financial decision support only", "Market data and model outputs can be incomplete or wrong"] + ([f"Sector {sector} is excluded by the user policy"] if sector_blocked else []),
+            "key_factors": [
+                f"combined signal {signal:.2f}",
+                f"selected risk policy {selected}",
+                f"maximum position {context.run.investor_policy.maximum_position_percent:.0f}%",
+                "bounded bull-bear research",
+            ],
+            "warnings": [
+                "Financial decision support only",
+                "Market data and model outputs can be incomplete or wrong",
+            ]
+            + ([f"Sector {sector} is excluded by the user policy"] if sector_blocked else []),
             "inputs": inputs,
         }
     if node.type == "report_renderer":
@@ -174,11 +196,26 @@ async def deterministic_executor(
                 "warnings": decision.get("warnings", []),
             },
             "sections": [
-                {"title": "Market and technical analysis", "summary": "Price evidence and technical indicators were normalized and reviewed."},
-                {"title": "Fundamental analysis", "summary": "Company data and financial ratios were checked as a separate evidence branch."},
-                {"title": "News and sentiment", "summary": "Text evidence was compared with market evidence when the selected analysts were enabled."},
-                {"title": "Research debate", "summary": f"Bull and bear cases used a bounded debate of up to {configuration.research_depth} rounds."},
-                {"title": "Risk review", "summary": f"Aggressive, neutral, and conservative views were merged for a {configuration.risk_profile} user profile."},
+                {
+                    "title": "Market and technical analysis",
+                    "summary": "Price evidence and technical indicators were normalized and reviewed.",
+                },
+                {
+                    "title": "Fundamental analysis",
+                    "summary": "Company data and financial ratios were checked as a separate evidence branch.",
+                },
+                {
+                    "title": "News and sentiment",
+                    "summary": "Text evidence was compared with market evidence when the selected analysts were enabled.",
+                },
+                {
+                    "title": "Research debate",
+                    "summary": f"Bull and bear cases used a bounded debate of up to {configuration.research_depth} rounds.",
+                },
+                {
+                    "title": "Risk review",
+                    "summary": f"Aggressive, neutral, and conservative views were merged for a {configuration.risk_profile} user profile.",
+                },
             ],
             "analysis_settings": configuration.model_dump(mode="json"),
             "investor_policy": context.run.investor_policy.model_dump(mode="json"),
@@ -270,7 +307,9 @@ def _validate_evidence_time(value: Any, as_of: datetime, max_age_hours: int) -> 
         elif kind == "fetch_macro":
             allowed_age = max(allowed_age, 24 * 14)
         if cutoff - timestamp > timedelta(hours=allowed_age):
-            raise ValueError(f"{kind or 'Evidence'} is older than its {allowed_age}-hour freshness rule")
+            raise ValueError(
+                f"{kind or 'Evidence'} is older than its {allowed_age}-hour freshness rule"
+            )
 
 
 def _guard_evidence_time(
@@ -316,7 +355,9 @@ def _technical_indicators(inputs: dict[str, Any]) -> dict[str, Any]:
         volumes = []
     if len(closes) < 2:
         raise ValueError("At least two prices are needed for technical analysis")
-    returns = [current / previous - 1 for previous, current in zip(closes, closes[1:], strict=False)]
+    returns = [
+        current / previous - 1 for previous, current in zip(closes, closes[1:], strict=False)
+    ]
     momentum = closes[-1] / closes[max(0, len(closes) - 21)] - 1
     sma20 = statistics.fmean(closes[-20:])
     sma50 = statistics.fmean(closes[-50:])
@@ -349,7 +390,12 @@ def _technical_indicators(inputs: dict[str, Any]) -> dict[str, Any]:
 def _fundamental_ratios(inputs: dict[str, Any]) -> dict[str, Any]:
     source = _find_first(inputs, "company")
     if not source:
-        return {"kind": "fundamental_ratios", "signal_score": 0.5, "available_metrics": 0, "source": inputs}
+        return {
+            "kind": "fundamental_ratios",
+            "signal_score": 0.5,
+            "available_metrics": 0,
+            "source": inputs,
+        }
     company = source["company"]
 
     def number(name: str) -> float | None:
@@ -366,12 +412,30 @@ def _fundamental_ratios(inputs: dict[str, Any]) -> dict[str, Any]:
     earnings_growth = number("QuarterlyEarningsGrowthYOY")
     score_parts = [
         0.65 if pe is not None and 0 < pe <= 25 else 0.4 if pe is not None else 0.5,
-        0.7 if margin is not None and margin >= 0.15 else 0.4 if margin is not None and margin < 0 else 0.5,
+        0.7
+        if margin is not None and margin >= 0.15
+        else 0.4
+        if margin is not None and margin < 0
+        else 0.5,
         0.7 if roe is not None and roe >= 0.15 else 0.45 if roe is not None else 0.5,
-        0.7 if revenue_growth is not None and revenue_growth > 0.08 else 0.4 if revenue_growth is not None and revenue_growth < 0 else 0.5,
-        0.7 if earnings_growth is not None and earnings_growth > 0.08 else 0.4 if earnings_growth is not None and earnings_growth < 0 else 0.5,
+        0.7
+        if revenue_growth is not None and revenue_growth > 0.08
+        else 0.4
+        if revenue_growth is not None and revenue_growth < 0
+        else 0.5,
+        0.7
+        if earnings_growth is not None and earnings_growth > 0.08
+        else 0.4
+        if earnings_growth is not None and earnings_growth < 0
+        else 0.5,
     ]
-    metrics = {"pe_ratio": pe, "profit_margin": margin, "return_on_equity": roe, "revenue_growth": revenue_growth, "earnings_growth": earnings_growth}
+    metrics = {
+        "pe_ratio": pe,
+        "profit_margin": margin,
+        "return_on_equity": roe,
+        "revenue_growth": revenue_growth,
+        "earnings_growth": earnings_growth,
+    }
     return {
         "kind": "fundamental_ratios",
         "signal_score": round(statistics.fmean(score_parts), 4),
@@ -387,21 +451,37 @@ def _analyst_output(node_type: str, inputs: dict[str, Any], ticker: str) -> dict
     if node_type == "market_analyst":
         evidence = _find_first(inputs, "momentum_20d") or {}
         score = float(evidence.get("signal_score", 0.5))
-        points = [f"20-day momentum: {float(evidence.get('momentum_20d', 0)):.2%}", f"RSI(14): {float(evidence.get('rsi_14', 50)):.1f}", f"Annualized volatility: {float(evidence.get('annualized_volatility', 0)):.2%}"]
+        points = [
+            f"20-day momentum: {float(evidence.get('momentum_20d', 0)):.2%}",
+            f"RSI(14): {float(evidence.get('rsi_14', 50)):.1f}",
+            f"Annualized volatility: {float(evidence.get('annualized_volatility', 0)):.2%}",
+        ]
         risks = ["Price trends can reverse and historical volatility can change."]
     elif node_type == "fundamental_analyst":
         evidence = _find_first(inputs, "available_metrics") or {}
         score = float(evidence.get("signal_score", 0.5))
         metrics = evidence.get("metrics", {})
-        points = [f"Sector: {evidence.get('sector')}", f"P/E ratio: {metrics.get('pe_ratio')}", f"Profit margin: {metrics.get('profit_margin')}", f"Revenue growth: {metrics.get('revenue_growth')}"]
+        points = [
+            f"Sector: {evidence.get('sector')}",
+            f"P/E ratio: {metrics.get('pe_ratio')}",
+            f"Profit margin: {metrics.get('profit_margin')}",
+            f"Revenue growth: {metrics.get('revenue_growth')}",
+        ]
         risks = ["Current overview data may not include every filing or sector comparison."]
     else:
         evidence = _find_first(inputs, "articles") or {}
         articles = evidence.get("articles", [])
-        scores = [float(item["sentiment_score"]) for item in articles if item.get("sentiment_score") is not None]
+        scores = [
+            float(item["sentiment_score"])
+            for item in articles
+            if item.get("sentiment_score") is not None
+        ]
         average = statistics.fmean(scores) if scores else 0
         score = max(0.0, min(1.0, 0.5 + average / 2))
-        points = [f"Articles reviewed: {len(articles)}", f"Average provider sentiment: {average:.3f}"]
+        points = [
+            f"Articles reviewed: {len(articles)}",
+            f"Average provider sentiment: {average:.3f}",
+        ]
         points.extend(str(item.get("title")) for item in articles[:2])
         risks = ["News sentiment is noisy, time-sensitive, and may repeat the same event."]
     label = "BULLISH" if score >= 0.62 else "BEARISH" if score <= 0.38 else "NEUTRAL"
@@ -417,7 +497,10 @@ def _analyst_output(node_type: str, inputs: dict[str, Any], ticker: str) -> dict
         "key_points": points,
         "risks": risks,
         "evidence_refs": hashes,
-        "claims": [{"text": point, "confidence": round(confidence, 4), "evidence_refs": hashes} for point in points],
+        "claims": [
+            {"text": point, "confidence": round(confidence, 4), "evidence_refs": hashes}
+            for point in points
+        ],
     }
     if node_type == "fundamental_analyst":
         result["sector"] = evidence.get("sector")
@@ -425,18 +508,45 @@ def _analyst_output(node_type: str, inputs: dict[str, Any], ticker: str) -> dict
 
 
 def _research_case(bull: bool, inputs: dict[str, Any]) -> dict[str, Any]:
-    reports = [item for item in _all_dicts(inputs) if "specialist" in item and "signal_score" in item]
+    reports = [
+        item for item in _all_dicts(inputs) if "specialist" in item and "signal_score" in item
+    ]
     scores = [float(report["signal_score"]) for report in reports]
     mean_signal = statistics.fmean(scores) if scores else 0.5
     strength = mean_signal if bull else 1 - mean_signal
+    directional_weights = [
+        max(0.0, (score - 0.5) * 2) if bull else max(0.0, (0.5 - score) * 2) for score in scores
+    ]
+    weight_total = sum(directional_weights)
+    if not reports:
+        confidence = 0.0
+    elif weight_total == 0:
+        confidence = 0.2
+    else:
+        weighted_quality = (
+            sum(
+                weight * max(0.0, min(1.0, float(report.get("confidence", 0.5))))
+                for report, weight in zip(reports, directional_weights, strict=True)
+            )
+            / weight_total
+        )
+        coverage = sum(weight > 0 for weight in directional_weights) / len(reports)
+        directional_mass = weight_total / len(reports)
+        confidence = min(
+            0.95,
+            0.5 * weighted_quality + 0.25 * coverage + 0.25 * directional_mass,
+        )
     direction = "positive" if bull else "negative"
     ranked = sorted(reports, key=lambda item: float(item["signal_score"]), reverse=bull)
-    points = [f"{item['specialist'].replace('_', ' ')}: {float(item['signal_score']):.2f}" for item in ranked[:3]]
+    points = [
+        f"{item['specialist'].replace('_', ' ')}: {float(item['signal_score']):.2f}"
+        for item in ranked[:3]
+    ]
     return {
         "position": "bull" if bull else "bear",
         "strength": round(strength, 4),
-        "confidence": round(min(0.9, 0.55 + abs(strength - 0.5)), 4),
-        "summary": f"The {direction} case has strength {strength:.2f} after comparing {len(reports)} specialist views.",
+        "confidence": round(confidence, 4),
+        "summary": f"The {direction} case has support {strength:.2f} and evidence confidence {confidence:.2f} after comparing {len(reports)} specialist views.",
         "key_points": points or ["No specialist evidence was available."],
         "risks_or_counters": ["The opposing case must remain visible in the final decision."],
     }

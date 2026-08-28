@@ -47,7 +47,7 @@ It is the complete user-to-report workflow:
 - Typed ports and versioned workflow definitions.
 - Parallel scheduling with deterministic joins.
 - Required and optional branches with degraded results.
-- Bounded bull-versus-bear research loops.
+- Bounded bull-versus-bear research loops with separate case support and evidence-confidence measures.
 - Aggressive, balanced, and conservative risk reviews.
 - Time, model-call, provider-call, token, and parallelism budgets.
 - Validation, retries, fallback, pause, cancellation, checkpoints, and safe resume.
@@ -295,7 +295,7 @@ pnpm exec playwright test
 CI uses deterministic models and recorded evidence. Live provider tests must be
 run separately. The workflow core has an 80% minimum coverage gate.
 
-Latest local verification: 212 backend tests and 15 frontend tests passed. The
+Latest local verification: 214 backend tests and 17 frontend tests passed. The
 workflow engine reached 89% test coverage and the production frontend built
 successfully. The configuration matrix covers every research depth, analyst
 combination, risk profile, report level, reasoning level, supported language

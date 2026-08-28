@@ -48,6 +48,7 @@ lineage. It excludes portfolios, crypto, broker orders, and autonomous trading.
 | FR-35 | Workflow Lab lets a user rename, recolor, delete, and reset a node, or reset the whole draft, without replacing published versions or old reports. | Draft reset API test and Workflow Lab browser check |
 | FR-36 | Every offered New Analysis setting forms a valid workflow contract; invalid manual budgets return a readable field or graph error before queueing. | Configuration matrix and frontend error-format tests |
 | FR-37 | Non-USD market and fundamental values use a real historical FX rate, with source, rate, and original currency kept in lineage. | Provider conversion and live-run tests |
+| FR-38 | Bull and bear researchers expose directional support separately from evidence confidence. Support measures direction, while confidence uses the quality and coverage of evidence supporting that side. | Research metric, report, PDF and frontend checks |
 
 ## Quality requirements
 

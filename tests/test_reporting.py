@@ -20,9 +20,7 @@ def test_pdf_report_contains_every_agent_stage() -> None:
             ticker="AAPL",
             as_of=datetime.now(UTC) - timedelta(minutes=1),
         )
-        result = await WorkflowRuntime(deterministic_executors()).execute(
-            defense_workflow(), run
-        )
+        result = await WorkflowRuntime(deterministic_executors()).execute(defense_workflow(), run)
         nodes = {
             node_id: {"status": state.status.value, "output": state.output}
             for node_id, state in result.node_runs.items()
@@ -33,12 +31,15 @@ def test_pdf_report_contains_every_agent_stage() -> None:
     assert len(report["agent_analyses"]) == 4
     assert len(report["risk_analyses"]) == 3
     assert report["research_debate"]["bull_case"]["key_points"]
+    bull = report["research_debate"]["bull_case"]
+    bear = report["research_debate"]["bear_case"]
+    assert bull["support"] + bear["support"] == 1
     body = render_pdf(report)
     assert body.startswith(b"%PDF")
     assert len(body) > 5_000
-    text = "\n".join(
-        page.extract_text() or "" for page in PdfReader(BytesIO(body)).pages
-    )
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(body)).pages)
     assert "Specialist Analyst Views" in text
     assert "Bull and Bear Research Debate" in text
+    assert "Support:" in text
+    assert "Evidence confidence:" in text
     assert "Risk Team Views" in text

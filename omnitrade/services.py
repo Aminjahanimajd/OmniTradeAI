@@ -80,8 +80,12 @@ async def execute_task(task: NodeTask) -> NodeResult:
             chain = config.sentiment_providers
         else:
             chain = config.macro_providers
-        output = await fetch_from_chain(task.node.type, task.run.ticker, task.run.as_of, chain, task.connections)
-        return NodeResult(output=await convert_evidence_currency(output, config.base_currency, task.run.as_of))
+        output = await fetch_from_chain(
+            task.node.type, task.run.ticker, task.run.as_of, chain, task.connections
+        )
+        return NodeResult(
+            output=await convert_evidence_currency(output, config.base_currency, task.run.as_of)
+        )
     return NodeResult(output=await deterministic_executor(task.node, task.inputs, context))
 
 
@@ -198,6 +202,7 @@ async def model_execute(task: NodeTask) -> NodeResult:
             "evidence_refs",
             "claims",
             "signal_score",
+            "strength",
             "sector",
             "action",
             "confidence",
@@ -260,7 +265,13 @@ def remote_executor(url: str) -> NodeExecutor:
             context.spend_model_call(tokens=250)
         if node.type.startswith("fetch_"):
             config = context.run.configuration
-            selected = set(config.market_providers + config.fundamental_providers + config.news_providers + config.sentiment_providers + config.macro_providers)
+            selected = set(
+                config.market_providers
+                + config.fundamental_providers
+                + config.news_providers
+                + config.sentiment_providers
+                + config.macro_providers
+            )
         elif spec.group in {"specialist", "research", "risk", "output"}:
             selected = {context.run.configuration.model_provider}
         else:
@@ -269,7 +280,9 @@ def remote_executor(url: str) -> NodeExecutor:
         async with httpx.AsyncClient(timeout=node.timeout_seconds + 2) as client:
             response = await client.post(
                 url,
-                json=NodeTask(node=node, inputs=inputs, run=context.run, connections=scoped).model_dump(mode="json"),
+                json=NodeTask(
+                    node=node, inputs=inputs, run=context.run, connections=scoped
+                ).model_dump(mode="json"),
             )
             if not response.is_success:
                 try:
@@ -277,7 +290,9 @@ def remote_executor(url: str) -> NodeExecutor:
                 except (ValueError, AttributeError):
                     detail = None
                 raise RuntimeError(
-                    str(detail) if detail else f"{spec.group} service returned HTTP {response.status_code}"
+                    str(detail)
+                    if detail
+                    else f"{spec.group} service returned HTTP {response.status_code}"
                 )
             return NodeResult.model_validate(response.json()).output
 

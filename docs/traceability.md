@@ -21,6 +21,8 @@ verified choices shown on New Analysis.
 FR-34 maps Redis terminal events and final checkpoints to API report recovery.
 FR-35 maps node appearance metadata and safe draft reset to Workflow Lab and the
 workflow reset endpoint.
+FR-38 maps the research-case calculation to separate support and evidence-confidence
+fields in runtime output, saved reports, PDF export and the report GUI.
 
 | Requirement | Components | Main verification |
 |---|---|---|
@@ -49,3 +51,4 @@ workflow reset endpoint.
 | FR-35 | Workflow Lab node controls, `ui_color` draft metadata, draft reset endpoint | `test_workflow_draft_can_reset_without_replacing_published_version`, browser check |
 | FR-36 | run configuration contract, configured graph validator, readable API errors | `test_configuration_matrix.py` and GUI tests |
 | FR-37 | Frankfurter FX adapter, evidence hashes and currency metadata | provider unit test and live AMD report |
+| FR-38 | research executor, report builder, PDF export and debate cards | research metric and reporting tests, frontend build |

@@ -14,9 +14,10 @@ or individual ownership.
 | I7 | PostgreSQL service schemas, ownership tests, report history, node lineage, JSON/HTML/PDF export |
 | I8 | Failure scenario, worker-crash simulation, restart recovery, CI, Docker deployment, generated sequence diagram |
 
-Verified on 27 August 2026:
+Verified on 28 August 2026:
 
-- 212 backend tests and 15 frontend tests passed.
+- 214 backend tests and 17 frontend tests passed.
+- Bull and bear reports now show directional support separately from evidence confidence.
 - Custom workflow core coverage: 89%.
 - Ruff and strict mypy passed.
 - Frontend unit test, TypeScript build, and production Vite build passed.

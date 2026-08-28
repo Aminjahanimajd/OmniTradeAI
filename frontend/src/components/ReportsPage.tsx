@@ -111,10 +111,15 @@ function AnalystCard({ analysis }: { analysis: AgentAnalysis }) {
   </Card>;
 }
 
+export function debateSupport(debate?: DebateCase): number {
+  return debate?.support ?? debate?.confidence ?? 0;
+}
+
 function DebateCard({ title, debate, color }: { title: string; debate?: DebateCase; color: 'success' | 'error' }) {
+  const support = debateSupport(debate);
   return <Card variant="outlined" sx={{ p: 2, borderColor: `${color}.main` }}>
     <Typography variant="h6" color={`${color}.main`} fontWeight={900}>{title}</Typography>
-    {debate ? <><Typography fontWeight={700}>{debate.agent} · {Math.round(debate.confidence * 100)}%</Typography><Typography sx={{ my: 1 }}>{debate.summary}</Typography>{debate.key_points.map((point) => <Typography key={point} variant="body2">• {point}</Typography>)}{debate.counterpoints.length > 0 && <Typography variant="caption" color="text.secondary">Challenges: {debate.counterpoints.join(' · ')}</Typography>}</> : <Typography color="text.secondary">Not used in this run.</Typography>}
+    {debate ? <><Typography fontWeight={700}>{debate.agent}</Typography><Stack direction="row" spacing={1} sx={{ my: 1 }}><Chip size="small" label={`Support: ${Math.round(support * 100)}%`} /><Chip size="small" label={`Evidence confidence: ${Math.round(debate.confidence * 100)}%`} /></Stack><Typography sx={{ my: 1 }}>{debate.summary}</Typography>{debate.key_points.map((point) => <Typography key={point} variant="body2">• {point}</Typography>)}{debate.counterpoints.length > 0 && <Typography variant="caption" color="text.secondary">Challenges: {debate.counterpoints.join(' · ')}</Typography>}</> : <Typography color="text.secondary">Not used in this run.</Typography>}
   </Card>;
 }
 

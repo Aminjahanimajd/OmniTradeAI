@@ -2,8 +2,10 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
+
 from omnitrade.contracts import NodeStatus, Run, RunStatus
-from omnitrade.engine.executors import deterministic_executors
+from omnitrade.engine.executors import _research_case, deterministic_executors
 from omnitrade.engine.runtime import WorkflowRuntime
 from omnitrade.sample_workflow import defense_workflow
 
@@ -15,6 +17,33 @@ def make_run():
         ticker="AAPL",
         as_of=datetime.now(UTC) - timedelta(minutes=1),
     )
+
+
+def test_bull_and_bear_support_and_confidence_are_independent() -> None:
+    reports = {
+        "specialists": [
+            {"specialist": "market_analyst", "signal_score": 0.8, "confidence": 0.9},
+            {"specialist": "fundamental_analyst", "signal_score": 0.7, "confidence": 0.8},
+            {"specialist": "news_analyst", "signal_score": 0.4, "confidence": 0.6},
+        ]
+    }
+
+    bull = _research_case(True, reports)
+    bear = _research_case(False, reports)
+
+    assert bull["strength"] + bear["strength"] == pytest.approx(1)
+    assert bull["strength"] != bear["strength"]
+    assert bull["confidence"] != bear["confidence"]
+    assert bull["confidence"] > bear["confidence"]
+    assert all(0 <= case[key] <= 1 for case in (bull, bear) for key in ("strength", "confidence"))
+
+
+def test_research_case_without_evidence_reports_no_confidence() -> None:
+    bull = _research_case(True, {})
+    bear = _research_case(False, {})
+
+    assert bull["strength"] == bear["strength"] == 0.5
+    assert bull["confidence"] == bear["confidence"] == 0
 
 
 def test_runtime_completes_and_is_deterministic():
@@ -52,9 +81,16 @@ def test_investor_loss_limit_changes_risk_policy() -> None:
         normal_run = make_run()
         strict_run = make_run()
         strict_run.investor_policy.maximum_loss_percent = 5
-        normal = await WorkflowRuntime(deterministic_executors()).execute(defense_workflow(), normal_run)
-        strict = await WorkflowRuntime(deterministic_executors()).execute(defense_workflow(), strict_run)
-        assert normal.node_runs["balanced"].output["summary"] != strict.node_runs["balanced"].output["summary"]
+        normal = await WorkflowRuntime(deterministic_executors()).execute(
+            defense_workflow(), normal_run
+        )
+        strict = await WorkflowRuntime(deterministic_executors()).execute(
+            defense_workflow(), strict_run
+        )
+        assert (
+            normal.node_runs["balanced"].output["summary"]
+            != strict.node_runs["balanced"].output["summary"]
+        )
 
     asyncio.run(scenario())
 
@@ -161,11 +197,7 @@ def test_paused_run_resumes_without_repeating_completed_nodes():
         )
 
         assert second.run.status == RunStatus.SUCCEEDED
-        restarted = {
-            event.node_id
-            for event in second.events
-            if event.event_type == "node.started"
-        }
+        restarted = {event.node_id for event in second.events if event.event_type == "node.started"}
         assert completed_before.isdisjoint(restarted)
 
     asyncio.run(scenario())
@@ -188,10 +220,7 @@ def test_stale_optional_news_degrades_without_stopping_report():
         assert result.run.status == RunStatus.DEGRADED
         assert result.node_runs["time_guard"].status == NodeStatus.DEGRADED
         assert result.node_runs["report"].status == NodeStatus.SUCCEEDED
-        assert any(
-            "fetch_news was excluded" in reason
-            for reason in result.run.degraded_reasons
-        )
+        assert any("fetch_news was excluded" in reason for reason in result.run.degraded_reasons)
 
     asyncio.run(scenario())
 
