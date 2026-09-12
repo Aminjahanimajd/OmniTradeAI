@@ -27,7 +27,14 @@ class DeterministicFakeModel:
 
 
 class OpenAICompatibleClient:
-    def __init__(self, base_url: str, api_key: str, model: str, timeout_seconds: float = 30, temperature: float | None = None):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout_seconds: float = 30,
+        temperature: float | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
@@ -50,7 +57,13 @@ class OpenAICompatibleClient:
 
 
 class AnthropicClient:
-    def __init__(self, api_key: str, model: str, base_url: str = "https://api.anthropic.com", temperature: float | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str = "https://api.anthropic.com",
+        temperature: float | None = None,
+    ):
         self.api_key, self.model, self.base_url = api_key, model, base_url.rstrip("/")
         self.temperature = temperature
 
@@ -59,7 +72,12 @@ class AnthropicClient:
             response = await client.post(
                 f"{self.base_url}/v1/messages",
                 headers={"x-api-key": self.api_key, "anthropic-version": "2023-06-01"},
-                json={"model": self.model, "max_tokens": 1800, **({"temperature": self.temperature} if self.temperature is not None else {}), "messages": [{"role": "user", "content": prompt}]},
+                json={
+                    "model": self.model,
+                    "max_tokens": 1800,
+                    **({"temperature": self.temperature} if self.temperature is not None else {}),
+                    "messages": [{"role": "user", "content": prompt}],
+                },
             )
             response.raise_for_status()
             return str(response.json()["content"][0]["text"])
@@ -71,19 +89,38 @@ class GeminiClient:
         self.temperature = temperature
 
     async def complete(self, prompt: str) -> str:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        )
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
                 url,
                 params={"key": self.api_key},
-                json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {**({"temperature": self.temperature} if self.temperature is not None else {}), "responseMimeType": "application/json"}},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        **(
+                            {"temperature": self.temperature}
+                            if self.temperature is not None
+                            else {}
+                        ),
+                        "responseMimeType": "application/json",
+                    },
+                },
             )
             response.raise_for_status()
             return str(response.json()["candidates"][0]["content"]["parts"][0]["text"])
 
 
 class AzureOpenAIClient:
-    def __init__(self, api_key: str, model: str, base_url: str, api_version: str, temperature: float | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str,
+        api_version: str,
+        temperature: float | None = None,
+    ):
         self.api_key, self.model = api_key, model
         self.base_url, self.api_version = base_url.rstrip("/"), api_version
         self.temperature = temperature
@@ -92,8 +129,13 @@ class AzureOpenAIClient:
         url = f"{self.base_url}/openai/deployments/{self.model}/chat/completions"
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
-                url, params={"api-version": self.api_version}, headers={"api-key": self.api_key},
-                json={"messages": [{"role": "user", "content": prompt}], **({"temperature": self.temperature} if self.temperature is not None else {})},
+                url,
+                params={"api-version": self.api_version},
+                headers={"api-key": self.api_key},
+                json={
+                    "messages": [{"role": "user", "content": prompt}],
+                    **({"temperature": self.temperature} if self.temperature is not None else {}),
+                },
             )
             response.raise_for_status()
             return str(response.json()["choices"][0]["message"]["content"])
@@ -121,7 +163,11 @@ class BedrockClient:
                     json={
                         "messages": [{"role": "user", "content": [{"text": prompt}]}],
                         "inferenceConfig": {
-                            **({"temperature": self.temperature} if self.temperature is not None else {}),
+                            **(
+                                {"temperature": self.temperature}
+                                if self.temperature is not None
+                                else {}
+                            ),
                             "maxTokens": 1800,
                         },
                     },
@@ -144,28 +190,43 @@ class BedrockClient:
             response = client.converse(
                 modelId=self.model,
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig={**({"temperature": self.temperature} if self.temperature is not None else {}), "maxTokens": 1800},
+                inferenceConfig={
+                    **({"temperature": self.temperature} if self.temperature is not None else {}),
+                    "maxTokens": 1800,
+                },
             )
             return str(response["output"]["message"]["content"][0]["text"])
 
         return await asyncio.to_thread(call)
 
 
-def build_model_client(settings: dict[str, str], model: str, temperature: float | None = None) -> ModelClient:
+def build_model_client(
+    settings: dict[str, str], model: str, temperature: float | None = None
+) -> ModelClient:
     provider = settings["provider"]
     api_key = settings.get("api_key", "")
     if provider == "anthropic":
-        return AnthropicClient(api_key, model, settings.get("base_url", "https://api.anthropic.com"), temperature)
+        return AnthropicClient(
+            api_key, model, settings.get("base_url", "https://api.anthropic.com"), temperature
+        )
     if provider == "google":
         return GeminiClient(api_key, model, temperature)
     if provider == "azure":
-        return AzureOpenAIClient(api_key, model, settings["base_url"], settings.get("azure_api_version", "2024-10-21"), temperature)
+        return AzureOpenAIClient(
+            api_key,
+            model,
+            settings["base_url"],
+            settings.get("azure_api_version", "2024-10-21"),
+            temperature,
+        )
     if provider == "bedrock":
         return BedrockClient(settings, model, temperature)
     base_url = settings.get("base_url")
     if not base_url:
         raise ValueError(f"A base URL is required for {provider}")
-    return OpenAICompatibleClient(base_url, api_key or "not-required", model, temperature=temperature)
+    return OpenAICompatibleClient(
+        base_url, api_key or "not-required", model, temperature=temperature
+    )
 
 
 def extract_json_object(raw: str) -> dict[str, Any]:

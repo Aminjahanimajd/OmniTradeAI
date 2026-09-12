@@ -77,15 +77,16 @@ def test_workflow_draft_can_reset_without_replacing_published_version() -> None:
     with TestClient(app) as client:
         headers = auth(client)
         workflow = client.post("/api/v1/workflows/sample", headers=headers).json()
-        version = client.post(
-            f"/api/v1/workflows/{workflow['id']}/publish", headers=headers
-        ).json()
+        version = client.post(f"/api/v1/workflows/{workflow['id']}/publish", headers=headers).json()
         changed = workflow["definition"]
         changed["nodes"][0]["name"] = "Custom start"
         changed["nodes"][0]["config"]["ui_color"] = "#123456"
-        assert client.put(
-            f"/api/v1/workflows/{workflow['id']}", headers=headers, json=changed
-        ).status_code == 200
+        assert (
+            client.put(
+                f"/api/v1/workflows/{workflow['id']}", headers=headers, json=changed
+            ).status_code
+            == 200
+        )
 
         reset = client.post(
             f"/api/v1/workflows/{workflow['id']}/reset-default", headers=headers
@@ -111,12 +112,17 @@ def test_completed_worker_events_recover_late_non_aapl_report() -> None:
         output={"ticker": "NVDA", "decision": {"action": "HOLD", "confidence": 0.6}},
     )
     events = [
-        RunEvent(event_type="run.started", run_id=run.id, trace_id=run.trace_id, occurred_at=started_at),
+        RunEvent(
+            event_type="run.started", run_id=run.id, trace_id=run.trace_id, occurred_at=started_at
+        ),
         RunEvent(
             event_type="run.checkpointed",
             run_id=run.id,
             trace_id=run.trace_id,
-            payload={"sequence": 1, "node_states": {"report": report_state.model_dump(mode="json")}},
+            payload={
+                "sequence": 1,
+                "node_states": {"report": report_state.model_dump(mode="json")},
+            },
         ),
         RunEvent(
             event_type="run.completed",
@@ -140,9 +146,7 @@ def test_pause_and_old_run_resume_are_exposed_by_api(monkeypatch) -> None:
     with TestClient(app) as client:
         headers = auth(client)
         workflow = client.post("/api/v1/workflows/sample", headers=headers).json()
-        version = client.post(
-            f"/api/v1/workflows/{workflow['id']}/publish", headers=headers
-        ).json()
+        version = client.post(f"/api/v1/workflows/{workflow['id']}/publish", headers=headers).json()
         owner_id = next(
             value["owner_id"]
             for value in store.workflows.values()
@@ -162,8 +166,7 @@ def test_pause_and_old_run_resume_are_exposed_by_api(monkeypatch) -> None:
         assert paused.status_code == 202
         assert paused.json()["status"] == "pausing"
         assert any(
-            event.event_type == "run.pause_requested"
-            for event in store.run_events[active.id]
+            event.event_type == "run.pause_requested" for event in store.run_events[active.id]
         )
 
         active.status = RunStatus.PAUSED
@@ -173,8 +176,7 @@ def test_pause_and_old_run_resume_are_exposed_by_api(monkeypatch) -> None:
         assert resumed.status_code == 202
         assert resumed.json()["status"] == "queued"
         assert any(
-            event.event_type == "run.resume_requested"
-            for event in store.run_events[active.id]
+            event.event_type == "run.resume_requested" for event in store.run_events[active.id]
         )
 
 
@@ -267,9 +269,10 @@ def test_verified_data_provider_labels_and_roles_reach_analysis(monkeypatch) -> 
                 headers=headers,
                 json={"provider": provider},
             )
-            assert client.post(
-                f"/api/v1/connections/{provider}/verify", headers=headers
-            ).status_code == 200
+            assert (
+                client.post(f"/api/v1/connections/{provider}/verify", headers=headers).status_code
+                == 200
+            )
         options = client.get("/api/v1/analysis-options", headers=headers).json()
         assert options["data_provider_labels"]["fred"] == "FRED"
         assert options["data_provider_labels"]["polymarket"] == "Polymarket"
@@ -321,18 +324,16 @@ def test_run_settings_are_validated_before_queueing() -> None:
     with TestClient(app) as client:
         headers = auth(client)
         workflow = client.post("/api/v1/workflows/sample", headers=headers).json()
-        version = client.post(
-            f"/api/v1/workflows/{workflow['id']}/publish", headers=headers
-        ).json()
+        version = client.post(f"/api/v1/workflows/{workflow['id']}/publish", headers=headers).json()
         response = client.post(
             "/api/v1/runs",
             headers=headers,
             json={
-                    "workflow_version_id": version["id"],
-                    "ticker": "AAPL",
-                    "as_of": "2026-01-01T10:00:00Z",
-                    "configuration": {"data_mode": "recorded"},
-                    "budget_override": {
+                "workflow_version_id": version["id"],
+                "ticker": "AAPL",
+                "as_of": "2026-01-01T10:00:00Z",
+                "configuration": {"data_mode": "recorded"},
+                "budget_override": {
                     "max_runtime_seconds": 180,
                     "max_model_calls": 1,
                     "max_provider_calls": 30,
@@ -353,9 +354,7 @@ def test_selected_analysts_change_the_executed_workflow() -> None:
     with TestClient(app) as client:
         headers = auth(client)
         workflow = client.post("/api/v1/workflows/sample", headers=headers).json()
-        version = client.post(
-            f"/api/v1/workflows/{workflow['id']}/publish", headers=headers
-        ).json()
+        version = client.post(f"/api/v1/workflows/{workflow['id']}/publish", headers=headers).json()
         response = client.post(
             "/api/v1/runs",
             headers=headers,
@@ -363,7 +362,7 @@ def test_selected_analysts_change_the_executed_workflow() -> None:
                 "workflow_version_id": version["id"],
                 "ticker": "AAPL",
                 "as_of": "2026-01-01T10:00:00Z",
-                    "configuration": {"data_mode": "recorded", "analysts": ["market"]},
+                "configuration": {"data_mode": "recorded", "analysts": ["market"]},
             },
         )
         assert response.status_code == 202
@@ -382,9 +381,7 @@ def test_live_only_mode_is_rejected_when_not_configured() -> None:
     with TestClient(app) as client:
         headers = auth(client)
         workflow = client.post("/api/v1/workflows/sample", headers=headers).json()
-        version = client.post(
-            f"/api/v1/workflows/{workflow['id']}/publish", headers=headers
-        ).json()
+        version = client.post(f"/api/v1/workflows/{workflow['id']}/publish", headers=headers).json()
         response = client.post(
             "/api/v1/runs",
             headers=headers,

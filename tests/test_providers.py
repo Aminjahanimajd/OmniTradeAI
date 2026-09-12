@@ -17,9 +17,15 @@ def test_real_provider_chain_never_inserts_recorded_data(monkeypatch: pytest.Mon
         async def fetch_node(self, node_type: str, ticker: str, as_of: datetime):
             raise ProviderError("real source unavailable")
 
-    monkeypatch.setattr("omnitrade.providers.live_provider", lambda name, settings: BrokenNodeProvider())
+    monkeypatch.setattr(
+        "omnitrade.providers.live_provider", lambda name, settings: BrokenNodeProvider()
+    )
     with pytest.raises(ProviderError, match="All selected real providers failed"):
-        asyncio.run(fetch_from_chain("fetch_market", "AAPL", datetime.now(UTC), ["yfinance", "alpha_vantage"], {}))
+        asyncio.run(
+            fetch_from_chain(
+                "fetch_market", "AAPL", datetime.now(UTC), ["yfinance", "alpha_vantage"], {}
+            )
+        )
 
 
 def test_real_provider_chain_uses_the_next_selected_source(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,9 +43,7 @@ def test_real_provider_chain_uses_the_next_selected_source(monkeypatch: pytest.M
     )
 
     result = asyncio.run(
-        fetch_from_chain(
-            "fetch_market", "AMD", datetime.now(UTC), ["first", "second"], {}
-        )
+        fetch_from_chain("fetch_market", "AMD", datetime.now(UTC), ["first", "second"], {})
     )
 
     assert result["provider"] == "second"
@@ -61,9 +65,7 @@ def test_alpha_vantage_market_normalization_blocks_look_ahead() -> None:
             for day in range(1, 32)
         }
     }
-    result = provider._normalize(
-        "fetch_market", "IBM", datetime(2026, 1, 25, 12, tzinfo=UTC), body
-    )
+    result = provider._normalize("fetch_market", "IBM", datetime(2026, 1, 25, 12, tzinfo=UTC), body)
     assert result["bars"][-1]["date"] == "2026-01-25"
     assert all(item["date"] <= "2026-01-25" for item in result["bars"])
 
@@ -73,7 +75,9 @@ def test_currency_conversion_uses_current_frankfurter_api(monkeypatch: pytest.Mo
 
     def handler(request: httpx.Request) -> httpx.Response:
         requested.append(request)
-        return httpx.Response(200, json={"date": "2026-08-27", "base": "USD", "rates": {"EUR": 0.85}})
+        return httpx.Response(
+            200, json={"date": "2026-08-27", "base": "USD", "rates": {"EUR": 0.85}}
+        )
 
     transport = httpx.MockTransport(handler)
     async_client = httpx.AsyncClient
@@ -105,8 +109,12 @@ def test_provider_http_errors_do_not_leak_request_urls(monkeypatch: pytest.Monke
             response = httpx.Response(429, request=request)
             raise httpx.HTTPStatusError("limited", request=request, response=response)
 
-    monkeypatch.setattr("omnitrade.providers.live_provider", lambda name, settings: BrokenNodeProvider())
+    monkeypatch.setattr(
+        "omnitrade.providers.live_provider", lambda name, settings: BrokenNodeProvider()
+    )
     with pytest.raises(ProviderError) as caught:
-        asyncio.run(fetch_from_chain("fetch_market", "AMD", datetime.now(UTC), ["alpha_vantage"], {}))
+        asyncio.run(
+            fetch_from_chain("fetch_market", "AMD", datetime.now(UTC), ["alpha_vantage"], {})
+        )
     assert "HTTP 429" in str(caught.value)
     assert "private" not in str(caught.value)

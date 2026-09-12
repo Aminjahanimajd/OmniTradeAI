@@ -263,9 +263,7 @@ class PostgresStore(InMemoryStore):
     def save_profile(self, owner_id: UUID, profile: UserProfile) -> UserProfile:
         super().save_profile(owner_id, profile)
         with self.sessions.begin() as session:
-            session.merge(
-                ProfileRow(owner_id=owner_id, body=profile.model_dump(mode="json"))
-            )
+            session.merge(ProfileRow(owner_id=owner_id, body=profile.model_dump(mode="json")))
         return profile
 
     def add_event(self, event: RunEvent) -> None:

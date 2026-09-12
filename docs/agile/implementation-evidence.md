@@ -16,10 +16,12 @@ or individual ownership.
 
 Verified on 28 August 2026:
 
-- 214 backend tests and 17 frontend tests passed.
+- 222 backend tests and 17 frontend tests passed.
 - Bull and bear reports now show directional support separately from evidence confidence.
 - Custom workflow core coverage: 89%.
-- Ruff and strict mypy passed.
+- Ruff passed and strict mypy reported no issues in 24 source files.
+- Workflow-core coverage was 89.37%, above the 80% release gate.
+- Measured local quality gates passed: authenticated API read p95 1.55 ms (target 500 ms), reference graph validation p95 0.19 ms (target 100 ms), and zero broker/order API routes.
 - Frontend unit test, TypeScript build, and production Vite build passed.
 - Playwright browser scenario passed.
 - Eight Compose containers started; PostgreSQL and Redis were healthy.

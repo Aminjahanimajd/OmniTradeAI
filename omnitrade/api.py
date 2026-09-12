@@ -71,9 +71,7 @@ def get_profile(user: User = Depends(current_user)) -> dict[str, object]:
 
 
 @app.put("/api/v1/profile")
-def update_profile(
-    profile: UserProfile, user: User = Depends(current_user)
-) -> dict[str, object]:
+def update_profile(profile: UserProfile, user: User = Depends(current_user)) -> dict[str, object]:
     return store.save_profile(user.id, profile).model_dump(mode="json")
 
 
@@ -112,11 +110,15 @@ def connection_catalog(_: User = Depends(current_user)) -> dict[str, object]:
     return {
         "providers": {
             name: {
-                  "label": spec["label"], "category": spec["category"],
-                  "base_url": spec.get("base_url"), "key_optional": spec.get("key_optional", False),
-                  "auto_connect": spec.get("auto_connect"), "availability_note": spec.get("availability_note"),
-                  "credential_note": spec.get("credential_note"),
-                  "models": spec.get("models", []), "capabilities": spec.get("capabilities", []),
+                "label": spec["label"],
+                "category": spec["category"],
+                "base_url": spec.get("base_url"),
+                "key_optional": spec.get("key_optional", False),
+                "auto_connect": spec.get("auto_connect"),
+                "availability_note": spec.get("availability_note"),
+                "credential_note": spec.get("credential_note"),
+                "models": spec.get("models", []),
+                "capabilities": spec.get("capabilities", []),
             }
             for name, spec in PROVIDER_CATALOG.items()
         }
@@ -129,14 +131,18 @@ def list_connections(user: User = Depends(current_user)) -> list[dict[str, objec
 
 
 @app.put("/api/v1/connections/{provider}")
-def save_connection(provider: str, value: ConnectionInput, user: User = Depends(current_user)) -> dict[str, object]:
+def save_connection(
+    provider: str, value: ConnectionInput, user: User = Depends(current_user)
+) -> dict[str, object]:
     if provider not in PROVIDER_CATALOG or value.provider != provider:
         raise HTTPException(status_code=400, detail="Unknown or mismatched provider")
     return connections.put(user.id, value).model_dump(mode="json")
 
 
 @app.post("/api/v1/connections/{provider}/verify")
-async def verify_saved_connection(provider: str, user: User = Depends(current_user)) -> dict[str, object]:
+async def verify_saved_connection(
+    provider: str, user: User = Depends(current_user)
+) -> dict[str, object]:
     value = connections.get(user.id, provider)
     if not value:
         raise HTTPException(status_code=404, detail="Save this connection before verification")
@@ -145,7 +151,11 @@ async def verify_saved_connection(provider: str, user: User = Depends(current_us
     except Exception as exc:
         message = verification_error_message(provider, exc)
         spec = PROVIDER_CATALOG[provider]
-        if spec["category"] == "data" and spec.get("key_optional") and spec.get("auto_connect") is False:
+        if (
+            spec["category"] == "data"
+            and spec.get("key_optional")
+            and spec.get("auto_connect") is False
+        ):
             connections.delete(user.id, provider)
         else:
             connections.mark_verified(user.id, provider, False, message)
@@ -178,20 +188,48 @@ def analysis_options(user: User = Depends(current_user)) -> dict[str, object]:
     settings = get_settings()
     verified = connections.runtime_connections(user.id)
     verified_models = {
-        name: (connections.models(user.id, name) or ([value["test_model"]] if value.get("test_model") else []))
-        for name, value in verified.items() if name in MODEL_PROVIDERS
+        name: (
+            connections.models(user.id, name)
+            or ([value["test_model"]] if value.get("test_model") else [])
+        )
+        for name, value in verified.items()
+        if name in MODEL_PROVIDERS
     }
     quick_models = sorted({model for models in verified_models.values() for model in models})
     return {
         "tickers": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AMD"],
-        "quick_models": quick_models or (["deterministic-fixture"] if settings.fixture_mode else []),
+        "quick_models": quick_models
+        or (["deterministic-fixture"] if settings.fixture_mode else []),
         "deep_models": quick_models or (["deterministic-fixture"] if settings.fixture_mode else []),
         "model_providers": sorted(name for name in verified if name in MODEL_PROVIDERS),
         "provider_models": verified_models,
-        "data_providers": sorted(name for name in verified if PROVIDER_CATALOG[name]["category"] == "data"),
-        "data_provider_labels": {name: PROVIDER_CATALOG[name]["label"] for name in verified if PROVIDER_CATALOG[name]["category"] == "data"},
-        "data_provider_capabilities": {name: PROVIDER_CATALOG[name].get("capabilities", []) for name in verified if PROVIDER_CATALOG[name]["category"] == "data"},
-        "languages": ["English", "Italian", "Chinese", "Japanese", "Korean", "Hindi", "Spanish", "Portuguese", "French", "German", "Arabic", "Russian"],
+        "data_providers": sorted(
+            name for name in verified if PROVIDER_CATALOG[name]["category"] == "data"
+        ),
+        "data_provider_labels": {
+            name: PROVIDER_CATALOG[name]["label"]
+            for name in verified
+            if PROVIDER_CATALOG[name]["category"] == "data"
+        },
+        "data_provider_capabilities": {
+            name: PROVIDER_CATALOG[name].get("capabilities", [])
+            for name in verified
+            if PROVIDER_CATALOG[name]["category"] == "data"
+        },
+        "languages": [
+            "English",
+            "Italian",
+            "Chinese",
+            "Japanese",
+            "Korean",
+            "Hindi",
+            "Spanish",
+            "Portuguese",
+            "French",
+            "German",
+            "Arabic",
+            "Russian",
+        ],
         "currencies": ["USD", "EUR", "GBP", "JPY"],
         "data_modes": ["recorded", "live"] if settings.fixture_mode else ["live"],
     }
@@ -213,11 +251,7 @@ def create_workflow(
 def create_sample(user: User = Depends(current_user)) -> dict[str, object]:
     sample = defense_workflow()
     existing = next(
-        (
-            record
-            for record in store.list_workflows(user.id)
-            if record["definition"] == sample
-        ),
+        (record for record in store.list_workflows(user.id) if record["definition"] == sample),
         None,
     )
     return _workflow_response(existing or store.create_workflow(user.id, sample))
@@ -249,9 +283,7 @@ def reset_workflow_default(
 
     try:
         store.get_workflow(workflow_id, user.id)
-        return _workflow_response(
-            store.update_workflow(workflow_id, user.id, defense_workflow())
-        )
+        return _workflow_response(store.update_workflow(workflow_id, user.id, defense_workflow()))
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail="Workflow not found") from exc
 
@@ -498,7 +530,9 @@ async def list_reports(user: User = Depends(current_user)) -> list[dict[str, obj
             continue
         report_data = cast(dict[str, object], result["report"])
         decision_value = report_data.get("decision")
-        decision = cast(dict[str, object], decision_value) if isinstance(decision_value, dict) else {}
+        decision = (
+            cast(dict[str, object], decision_value) if isinstance(decision_value, dict) else {}
+        )
         reports.append(
             {
                 "run_id": run.id,
@@ -584,12 +618,25 @@ async def _execute_run(run_id: UUID) -> None:
             all_connections = connections.runtime_connections(run.owner_id)
             if node.type.startswith("fetch_"):
                 config = run.configuration
-                selected = set(config.market_providers + config.fundamental_providers + config.news_providers + config.sentiment_providers + config.macro_providers)
+                selected = set(
+                    config.market_providers
+                    + config.fundamental_providers
+                    + config.news_providers
+                    + config.sentiment_providers
+                    + config.macro_providers
+                )
             elif NODE_CATALOG[node.type].group in {"specialist", "research", "risk", "output"}:
                 selected = {run.configuration.model_provider}
             else:
                 selected = set()
-            task = NodeTask(node=node, inputs=inputs, run=context.run, connections={name: value for name, value in all_connections.items() if name in selected})
+            task = NodeTask(
+                node=node,
+                inputs=inputs,
+                run=context.run,
+                connections={
+                    name: value for name, value in all_connections.items() if name in selected
+                },
+            )
             if NODE_CATALOG[node.type].group in {"specialist", "research", "risk"}:
                 return (await model_execute(task)).output
             if NODE_CATALOG[node.type].group == "output":
@@ -614,9 +661,7 @@ async def _execute_run(run_id: UUID) -> None:
         {},
     )
     store.save_run(result.run)
-    node_data = {
-        key: value.model_dump(mode="json") for key, value in result.node_runs.items()
-    }
+    node_data = {key: value.model_dump(mode="json") for key, value in result.node_runs.items()}
     if result.run.status == RunStatus.PAUSED:
         return
     store.save_result(
@@ -662,9 +707,7 @@ def _recover_run_from_events(run: Run, events: list[RunEvent]) -> bool:
     raw_states = checkpoint_event.payload.get("node_states")
     if not isinstance(raw_states, dict):
         return False
-    states = {
-        node_id: NodeRun.model_validate(value) for node_id, value in raw_states.items()
-    }
+    states = {node_id: NodeRun.model_validate(value) for node_id, value in raw_states.items()}
     report_state = states.get("report")
     if (
         not report_state
@@ -684,9 +727,7 @@ def _recover_run_from_events(run: Run, events: list[RunEvent]) -> bool:
         else 180
     )
     _apply_runtime_budget(run, events, runtime_limit)
-    node_data = {
-        node_id: state.model_dump(mode="json") for node_id, state in states.items()
-    }
+    node_data = {node_id: state.model_dump(mode="json") for node_id, state in states.items()}
     store.save_run(run)
     for event in events:
         store.add_event(event)
@@ -827,8 +868,7 @@ async def _combined_run_events(run_id: UUID) -> list[RunEvent]:
     by_id = {event.event_id: event for event in store.run_events[run_id]}
     if get_settings().env == "compose":
         redis_events = [
-            event
-            async for event in RedisStreamEventBus(get_settings().redis_url).stream(run_id)
+            event async for event in RedisStreamEventBus(get_settings().redis_url).stream(run_id)
         ]
         by_id.update({event.event_id: event for event in redis_events})
     return sorted(by_id.values(), key=lambda event: event.occurred_at)

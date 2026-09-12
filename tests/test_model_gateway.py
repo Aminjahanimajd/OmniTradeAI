@@ -55,8 +55,14 @@ def test_bedrock_bearer_token_uses_direct_authorization_header(monkeypatch: pyte
             return Response()
 
     monkeypatch.setattr("omnitrade.model_gateway.httpx.AsyncClient", lambda **_: Client())
-    result = asyncio.run(BedrockClient(
-        {"provider": "bedrock", "region": "us-east-1", "aws_bearer_token_bedrock": "private-token"},
-        "us.anthropic.claude-sonnet-4-6",
-    ).complete("verify"))
+    result = asyncio.run(
+        BedrockClient(
+            {
+                "provider": "bedrock",
+                "region": "us-east-1",
+                "aws_bearer_token_bedrock": "private-token",
+            },
+            "us.anthropic.claude-sonnet-4-6",
+        ).complete("verify")
+    )
     assert result == '{"status":"ok"}'

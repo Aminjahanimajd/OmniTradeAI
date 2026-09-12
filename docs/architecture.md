@@ -1,76 +1,50 @@
-# Architecture
+# Architecture control document
 
-## Context and safety boundary
+The detailed logical, process, development, data, interface, security, quality,
+and deployment design is in `docs/system-design.md`. Architecture decisions are
+in `docs/adr/`. Strict UML source and rendered figures are in
+`modeling/visual-paradigm/plantuml/V7_*.puml` and
+`modeling/visual-paradigm/uml-v7/`.
 
-The browser sends commands to the API. The workflow service owns graph state and
-scheduling. Evidence, model and report services execute typed tasks. PostgreSQL
-stores durable state, Redis Streams transports versioned events, and an artifact
-store keeps exports with hashes. There is no broker interface.
+## Main architecture
 
-```mermaid
-flowchart LR
-  U["Analyst"] --> GUI["React workflow IDE"]
-  GUI --> API["API service"]
-  GUI --> CON["Session connection setup"]
-  CON --> API
-  API --> PG[("PostgreSQL schemas")]
-  API --> RS[("Redis Streams")]
-  API -->|internal run command| WF["Workflow service"]
-  WF -->|versioned events| RS
-  WF -->|typed node task| EV["Evidence service"]
-  WF -->|typed node task| MG["Model gateway"]
-  WF -->|typed node task| RP["Report service"]
-  EV --> DP["Yahoo / Alpha Vantage / FRED / Polymarket / social feeds"]
-  MG --> LM["Verified cloud, Bedrock, local or compatible model"]
-  RP --> FS["Hashed artifacts"]
-  API -. "SSE events" .-> GUI
-```
+OmniTrade is a web information system with event-driven workflow control. The
+browser uses a public API. Workflow design owns drafts, validation, and
+immutable versions. Runtime owns scheduling, state, failure policy, budgets,
+events, checkpoints, and recovery. Evidence, model, and report components expose
+typed interfaces. PostgreSQL is durable truth; event transport supports live
+and distributed processing; the artifact store keeps hashed exports. External
+providers and models remain outside the product boundary. No broker interface
+exists.
 
-The API keeps verified credentials in process memory and sends only the needed
-connection to each internal task. Credentials are not stored in PostgreSQL,
-Redis events, reports or artifacts. Docker runs accept real providers only.
-Recorded providers and deterministic models are isolated test seams used by CI.
+## UML view set
 
-## Main run state
+| Concern | UML diagram |
+|---|---|
+| Scope and user goals | Use-case diagram |
+| Components and interfaces | Component diagram |
+| Code dependency direction | Package diagram |
+| Durable domain structure | Class and object diagrams |
+| Runtime internal collaboration | Composite-structure and communication diagrams |
+| End-to-end behavior | Sequence and interaction/activity diagrams |
+| Graph validation and scheduling algorithms | Activity diagrams |
+| Run lifecycle | State-machine diagram |
+| Pause/resume timing | Timing diagram |
+| Runtime topology | Deployment diagram |
 
-```mermaid
-stateDiagram-v2
-  [*] --> queued
-  queued --> running
-  running --> degraded: report completes with optional warnings
-  running --> succeeded
-  running --> cancelling
-  cancelling --> cancelled
-  running --> pausing: user requests safe pause
-  pausing --> paused: current batch ends and checkpoint is saved
-  running --> failed: required branch or budget fails
-  running --> interrupted: worker crash
-  paused --> queued: resume from checkpoint
-  failed --> queued: retry unfinished nodes
-  interrupted --> queued: recover after interruption
-  paused --> cancelled: final cancellation
-  succeeded --> [*]
-  degraded --> [*]
-  cancelled --> [*]
-```
+## Event and state rules
 
-A pause is cooperative. The engine finishes the active parallel node batch,
-saves all node states, and then stops. Resume keeps successful or degraded
-nodes and resets only unfinished nodes. Runs remain durable for later days, but
-session-only credentials must be reconnected before an old live run resumes.
-
-## Event rules
-
-Every event has `schema_version`, `event_id`, `event_type`, `run_id`, optional
-`node_id`, `trace_id`, `occurred_at`, and a typed payload. Consumers store event
-IDs before effects. Delivery is at least once; effects are idempotent. Consumer
-groups isolate services. Failed events enter a dead-letter stream after bounded
-retries.
+Each event has schema version, event ID, type, run ID, optional node ID, trace
+ID, time, and typed payload. Effects are idempotent. A cooperative pause finishes
+the active safe batch, saves a checkpoint, and then stops. Resume retains
+successful/degraded node states and resets only unfinished work. Cancellation
+is final. A required failure stops the required path; an allowed optional loss
+is disclosed as degradation.
 
 ## Data ownership
 
-The API schema owns users and access data. Workflow owns workflow versions,
-runs, node runs, checkpoints and events. Evidence owns normalized evidence and
-provider call records. Model owns calls and budget usage. Report owns decisions,
-claims, reports and artifact metadata. Cross-service access uses IDs and APIs,
-not direct table coupling.
+Identity owns user access. Workflow owns drafts, versions, runs, node states,
+events, and checkpoints. Evidence owns normalized items and provider metadata.
+Model owns call/usage metadata. Report owns decisions, claims, lineage, and
+artifact metadata. Cross-component access uses IDs and typed interfaces rather
+than hidden table coupling. Session credentials are not durable data.

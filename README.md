@@ -295,7 +295,7 @@ pnpm exec playwright test
 CI uses deterministic models and recorded evidence. Live provider tests must be
 run separately. The workflow core has an 80% minimum coverage gate.
 
-Latest local verification: 214 backend tests and 17 frontend tests passed. The
+Latest local verification: 222 backend tests and 17 frontend tests passed. The
 workflow engine reached 89% test coverage and the production frontend built
 successfully. The configuration matrix covers every research depth, analyst
 combination, risk profile, report level, reasoning level, supported language

@@ -131,7 +131,9 @@ class RunConfiguration(BaseModel):
             (self.sentiment_providers, {"yfinance", "alpha_vantage", "stocktwits", "reddit"}),
             (self.macro_providers, {"alpha_vantage", "fred", "polymarket"}),
         )
-        if any(not chain or not set(chain).issubset(allowed) for chain, allowed in category_allowed):
+        if any(
+            not chain or not set(chain).issubset(allowed) for chain, allowed in category_allowed
+        ):
             raise ValueError("every data category needs a compatible real provider chain")
         return self
 

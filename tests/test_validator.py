@@ -15,7 +15,8 @@ def test_optional_sentiment_agent_can_be_removed_and_published():
     graph = defense_workflow()
     graph.nodes = [node for node in graph.nodes if node.id != "sentiment_analyst"]
     graph.edges = [
-        edge for edge in graph.edges
+        edge
+        for edge in graph.edges
         if edge.source != "sentiment_analyst" and edge.target != "sentiment_analyst"
     ]
     result = WorkflowValidator().validate(graph)
